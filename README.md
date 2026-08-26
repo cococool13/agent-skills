@@ -5,7 +5,7 @@ Cohen's personal agent skills — source-managed via the [skills CLI](https://gi
 ## Install
 
 ```bash
-npx skills add cococool/agent-skills --all -g -y
+npx skills add cococool13/agent-skills --all -g -y
 ```
 
 ## Update

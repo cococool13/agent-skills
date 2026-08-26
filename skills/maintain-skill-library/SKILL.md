@@ -7,6 +7,21 @@ description: "Use when auditing, cleaning up, optimizing, documenting, or valida
 
 Keep the live skill system predictable, lean, and safe to update.
 
+## Cohen stack (canonical)
+
+| Layer | Location | Auto-update |
+| --- | --- | --- |
+| Personal skills | `cococool13/agent-skills` → `~/.agents/skills` | `npx skills update -g -y` |
+| Upstream skills | emilkowalski, vercel-labs, uizze, citrolabs, etc. | same |
+| Local overlays | `~/.agents/skill-overlays/` | `post-update-patches.py` after every update |
+| In-place only | `impeccable`, `qcc1-agentic-trading` stub | manual |
+
+Weekly: LaunchAgent `com.cococool.skills-update` runs `update-skills.sh`:
+update → post-update patches → prune scan-path duplicates.
+
+Edit personal skills in `~/Projects/agent-skills`, push to GitHub, then run the
+update script (or wait for Sunday 10:00).
+
 ## 1. Establish ownership
 
 Inventory every `SKILL.md` in `~/.agents/skills`, `~/.claude/skills`,
