@@ -29,5 +29,6 @@ skills/<name>/SKILL.md   # one folder per skill
 | `impeccable` | Local design system with heavy scripts; managed in-place |
 | `qcc1-agentic-trading` | Project-local stub → `Projects/Agentic Account` |
 | `ego-browser` | Upstream `citrolabs/ego-lite`; local overlays in `~/.agents/skill-overlays/` |
+| `impeccable` | Upstream `pbakaus/impeccable` (auto-updates via lock file) |
 
 Upstream skills (emilkowalski, vercel-labs, uizze, etc.) install separately via `npx skills add`.
