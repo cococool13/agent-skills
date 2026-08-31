@@ -22,14 +22,16 @@ look hand-crafted and **never "AI-generated."** Ship polished from the first pas
 ## Hosting is per-project — check before you assume
 | Project | Host |
 |---|---|
-| Spiral (`_spiral/Spiral`, the portfolio) | **Netlify** |
-| Coastal PharmaCare | **Cloudflare Pages** (`coastal-pharmacare`; manual deploy) |
-| Coastal Hardware, ENTR | Vercel |
-| JCC SECURE | Firebase Hosting |
+| Spiral Collection / spiral-brief (old spiral-demo) | **Cloudflare Pages** (`spiralcc.tech` / `spiraldemo.pages.dev`). Not the portfolio — that is `cococool13/portfolio` at https://cohencool.com |
+| Coastal PharmaCare | **Cloudflare Pages** |
+| Coastal Hardware New Build, ENTR, JCC forms/evaluator, PropScanner web | **Cloudflare Workers** |
+| JCC SECURE | **Firebase** |
+| Coastal Hardware (old Next checkout) | **retired** — do not deploy |
 
-If the repo has a `netlify.toml`, `firebase.json`, or Cloudflare deployment
-guidance, **stop** and follow that project's AGENTS.md / CLAUDE.md deploy section. Never
-migrate a site between hosts.
+Read the project's `AGENTS.md` / `CLAUDE.md` first, then `deploy-cloudflare`.
+A leftover `netlify.toml` or `vercel.json` is not the live host. Never migrate
+a site between hosts. Use `deploy-vercel` only if that project's `CLAUDE.md`
+still names Vercel as live (none of the live product sites do).
 
 ## Spec discipline (do this first, every time)
 1. **Read the project's brief files COMPLETELY before writing anything** —
@@ -63,9 +65,10 @@ conservative v1. When he does: **build v2 fully separate, never touch v1.** Use 
 separate dir or git worktree; keep both deployable.
 
 ## Deploy / handoff
-Deploy to the host in the table above — `deploy-vercel` for the Vercel sites,
-`netlify deploy --prod` for Spiral, and `npm run verify:full && npx wrangler pages deploy`
-for Coastal PharmaCare. Do the work here rather than handing off prompts (he hits
+Read the project's `AGENTS.md` / `CLAUDE.md` first, then use `deploy-cloudflare`.
+Do not run `netlify deploy --prod` for Spiral. Do not use `deploy-vercel` unless
+that project's `CLAUDE.md` still says the live host is Vercel (none of the live
+product sites do). Do the work here rather than handing off prompts (he hits
 Codex limits) unless asked. When a site is
 "done", run `de-ai-production-pass` before presenting it to a client. End by
 telling him exactly what he still needs to edit (env vars, domain, placeholders).
@@ -85,8 +88,9 @@ interactivity, WebGL shader). Standard loop for these:
    behind text over animated backgrounds; reduce parallax + disable custom cursor
    ≤768px; no horizontal overflow; audio off-by-default with accessible toggle.
 4. QA with `ego-browser`: full-page screenshot at 1280 and 380, verify
-   legibility and no regressions, then commit. Deploy via `deploy-vercel`.
+   legibility and no regressions, then commit. Deploy via `deploy-cloudflare`.
 
-## Deploy → use `deploy-vercel`
-For shipping these sites, use the `deploy-vercel` skill (`pnpm dlx vercel`, build
-gate, browse-QA verify) rather than re-deriving the deploy commands.
+## Deploy → use `deploy-cloudflare`
+For shipping these sites, read the project's `AGENTS.md` / `CLAUDE.md` first,
+then use the `deploy-cloudflare` skill. Use `deploy-vercel` only if that
+project's `CLAUDE.md` still names Vercel as live.
