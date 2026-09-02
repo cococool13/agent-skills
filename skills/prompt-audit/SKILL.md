@@ -10,7 +10,7 @@ Port of Anthropic `claude-api` **prompt-audit** (Peter Yang / Lance Martin, 2026
 ## Defaults (Cohen)
 
 - **Target model:** `grok-4.6` unless the request names another model.
-- **Default scope:** `~/.agents/AGENTS.md`, `~/.cursor/rules/`, `~/Projects/agent-skills/skills/`. Skip the UI taste pile (`refero-design`, `frontend-design`, `design-taste-*`, `gpt-taste`, `imagegen-*`, UIZZE, `impeccable`, `landing-page-design`, `redesign-existing-projects`) unless Cohen names those folders.
+- **Default scope:** `~/.agents/AGENTS.md`, `~/.cursor/rules/`, `~/Projects/agent-skills/skills/`, plus live `~/.agents/skills`. Parked skills in `~/.agents/parked-not-for-cursor` are out of scope unless Cohen names them.
 - **Apply edits** only if the request explicitly says to apply/clean. Otherwise report + proposed diff only.
 
 ## Run
