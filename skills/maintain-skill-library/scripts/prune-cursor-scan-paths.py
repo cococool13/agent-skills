@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Keep one live copy of each skill on Cursor's scan paths.
 
-Cursor indexes ~/.agents/skills, ~/.cursor/skills, ~/.claude/skills, and
-~/.codex/skills. Extra copies (real dirs or symlinks) make every slash
-entry appear 2–3 times. Canonical store is ~/.agents/skills.
+Cursor indexes ~/.agents/skills, ~/.cursor/skills, and ~/.codex/skills.
+Do not recreate ~/.claude. Extra copies make every slash entry appear
+twice. Canonical store is ~/.agents/skills.
 
 Does not touch ~/.cursor/skills-cursor or plugin caches.
 Retirements go to ~/.agents/skill-archive/<stamp>/ (never rm).
@@ -32,8 +32,8 @@ KEEP_IN_VIEWS = {
     ".impeccable",
 }
 
-# Cursor built-in /review already exists. Old Claude /ship conflicts with
-# ~/.agents/skills/ship. Park both command files.
+# Cursor built-in /review already exists. Park leftover command files if
+# a ~/.claude/commands dir ever reappears.
 PARK_COMMANDS = ("ship.md", "review.md")
 
 
@@ -122,22 +122,21 @@ Cursor already loads:
 - `~/.agents/skills` — personal and source-managed skills (canonical)
 - `~/.cursor/skills-cursor` — Cursor built-ins (managed by Cursor)
 
-`~/.claude/skills` and `~/.codex/skills` are also scanned. Keep those
-folders empty of skills or every slash entry appears twice.
+Keep `~/.codex/skills` empty of skills. Do not recreate `~/.claude`.
 
 Check **Customize → Skills** after a window reload to see the live set.
 """
     (CURSOR / "README.md").write_text(cursor_readme)
-    CODEX.mkdir(parents=True, exist_ok=True)
-    (CODEX / "README.md").write_text(
-        """# Codex skill view
+    if CODEX.parent.is_dir():
+        CODEX.mkdir(parents=True, exist_ok=True)
+        (CODEX / "README.md").write_text(
+            """# Codex skill view
 
 Do not put shared skills here. Cursor scans this folder.
 
 Canonical store: `~/.agents/skills` (Cursor, Grok, and the skills CLI).
-Codex-only skills: `~/.codex/skills.parked-not-for-cursor`.
 """
-    )
+        )
 
 
 def main() -> int:

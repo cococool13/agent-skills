@@ -24,17 +24,15 @@ update script (or wait for Sunday 10:00).
 
 ## 1. Establish ownership
 
-Inventory every `SKILL.md` in `~/.agents/skills`, `~/.claude/skills`,
-`~/.cursor/skills`, `~/.codex/skills`, enabled plugin roots, and any
-project-local skill roots. Use `~/.agents/.skill-lock.json` to distinguish
-source-managed installs from original personal skills.
+Inventory every `SKILL.md` in `~/.agents/skills`, `~/.cursor/skills`,
+`~/.codex/skills`, enabled plugin roots, and any project-local skill roots.
+Use `~/.agents/.skill-lock.json` to distinguish source-managed installs from
+original personal skills. Do not recreate `~/.claude`.
 
 `~/.agents/skills` is the canonical store for shared personal and source-managed
-skills. Cursor discovers that folder natively. Codex-only skills live in
-`~/.codex/skills.parked-not-for-cursor` so they do not load in every Cursor chat.
-Do not also install the same `SKILL.md` into `~/.cursor/skills`,
-`~/.claude/skills`, or `~/.codex/skills` — Cursor scans all four. Cursor
-built-ins (`~/.cursor/skills-cursor`) and plugin caches stay untouched.
+skills. Cursor discovers that folder natively. Do not also install the same
+`SKILL.md` into `~/.cursor/skills` or `~/.codex/skills`. Cursor built-ins
+(`~/.cursor/skills-cursor`) and live plugin caches stay untouched.
 
 After `npx skills update`, run
 `scripts/prune-cursor-scan-paths.py` so the CLI cannot re-spread copies into

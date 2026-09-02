@@ -17,11 +17,11 @@ and learns by doing. Runs **The Backpack Project, Inc.** (nonprofit, COO) and is
 Honors Student Council Treasurer. Two machines: a **Mac (M4 Pro)** and a
 **Windows 11 gaming PC** (the PC-Tweaks toolkit).
 
-## Agents he uses (2026-08)
+## Agents he uses (2026-09)
 
 - **Cursor** — primary daily coding agent (model grok-4.6)
 - **Grok** (CLI + bot) — secondary; shares `~/.agents/skills` and global AGENTS
-- Claude Code / Codex — unused; leftovers parked 2026-08-26. Claude.app and ChatGPT.app are chat apps only.
+- ChatGPT.app is a chat app only. Claude.app / Claude Code were removed 2026-09-01. Codex is not in the live stack.
 
 ## How he works (honor without being asked)
 
@@ -38,13 +38,15 @@ See `~/.agents/AGENTS.md` — don't pin framework versions here. Host is
 **per-project**; read `CLAUDE.md`. Live map: Cloudflare Pages (Spiral Collection,
 spiral-brief, Coastal PharmaCare), Cloudflare Workers (Coastal Hardware New
 Build, entr-website, JCC forms/evaluator, PropScanner web), Firebase (JCC
-SECURE). Coastal Hardware Next checkout is retired. Mobile → Flutter, **not
-currently installed.**
+SECURE). Coastal Hardware Next checkout is retired. Mobile is native iOS:
+**They Hold** (repo `latch`, scheme `Latch`) and Pulse. Flutter is not installed.
+- **Xcode 27 beta** at `/Applications/Xcode-beta.app` is required on macOS 27.
+  `/Applications/Xcode.app` is 26.6 and is not the active toolchain.
+  `DEVELOPER_DIR` is set in `~/.config/zsh/env.zsh`. Cursor drives iOS via
+  XcodeBuildMCP + SweetPad; skill `xcodebuildmcp`.
 
 ## Recurring environment gotchas (don't rediscover)
 
-- The Cowork sandbox bash CANNOT reach the real filesystem — use Desktop
-  Commander or osascript for real file ops on the Mac.
 - macOS often blocks `rm`/empty-dir removal from the VM; stage to Trash, never
   `sudo rm -rf`. Verify a move/copy landed before reporting done.
 - `mas` / `msupdate` fail non-interactively → App Store / MAU GUI.
@@ -52,9 +54,10 @@ currently installed.**
 - Secrets must never be sorted by extension → hand to `credential-sweep`.
 - `launchctl bootstrap` "error 5" often means disabled in the override DB —
   check `launchctl print-disabled gui/$(id -u)` before deeper debugging.
-- **Ego Lite / `ego-browser` is mandatory** for web QA, screenshots, and self-verification. Do not fall back to Cursor browser MCP, Aside, or agent-browser.
+- **Ego Lite / `ego-browser` is mandatory** for web QA, screenshots, and self-verification. Do not fall back to Cursor browser MCP, Aside, or agent-browser. Invoke `"$HOME/.local/bin/ego-browser"` (wrapper; Cursor GUI PATH is stripped). If `pageInfo()` is `0×0` or `captureScreenshot()` hangs, the Ego Lite window is minimized — CDP `Browser.setWindowBounds` `{windowState:'normal'}` after `openOrReuseTab`. Canonical skill is the writable directory at `~/.agents/skills/ego-browser`; do not edit `ego lite.app`.
 - M4 Pro disk audits: Cohen’s home is ~52 GB. The real fill is **`/Users/Shared/Movies` (~233 GB, Infuse 4K remuxes)**. Do not trash it. APFS headroom is the limiter, not leftover apps.
-- High Power Mode is already set on adapter (`pmset` `powermode` 2). Battery stays Automatic. `df`/`du` are aliased to `duf`/`ncdu` — use `/bin/df` and `/usr/bin/du`.
+- High Power Mode is already set on adapter (`pmset` `powermode` 2). Battery stays Automatic. `df`/`du` are not aliased. Disk overview is `disks` (duf), interactive usage is `usage` (ncdu). Interactive `top` is `btop`.
+- Terminal.app default/startup profile is **Clear Dark** (JetBrainsMono Nerd Font). Cursor's integrated terminal uses the same font. Shell config lives in `~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.config/zsh/env.zsh`, `~/.config/starship.toml`.
 
 ## Skill routing
 
