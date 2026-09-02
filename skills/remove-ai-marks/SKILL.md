@@ -75,9 +75,9 @@ python3 "$SCRIPTS/inspect_file.py" OUTPUT   # verify
 
 Optional tools if installed: `c2patool`, `exiftool` (auto-used when present; PDF strongly prefers exiftool).
 
-### 4. Layer B — always offer rewrite (prose)
+### 4. Layer B — offer rewrite (prose)
 
-After Layer A, **always propose** a statistical-mark reduction pass for natural-language content. Do not skip this step silently.
+After Layer A, offer a statistical-mark reduction pass for natural-language content.
 
 Multi-pass recipe:
 

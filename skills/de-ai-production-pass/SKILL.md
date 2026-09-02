@@ -10,7 +10,7 @@ The recurring "make it real and sellable" pass for client work (Coastal
 Hardware, Coastal PharmaCare, Spiral, print/signage packages, etc.). Cohen
 pitches these as paid engagements, so the bar is a polished, human-looking,
 production product.
-**Verify everything — never skip a check because "it probably works."**
+Run every check in the sections below. A pass that skips a listed check is not done.
 
 **Branches:** websites run all four sections; non-web artifacts (print PDFs,
 docs, decks) run sections 1 and 4 only.
@@ -45,6 +45,6 @@ everything else (a recurring correction: "keep X, only change Y").
 ## 4. Handoff
 Preserve originals (`_archive/`) before replacing deliverables. Commit per step
 where there's a repo. Write `CHANGES.md` documenting what changed. Websites:
-deploy to Vercel and use the `code-review` skill before final deploy. Finish
+read the project CLAUDE.md, then `deploy-cloudflare`. Use Grok `/review` before final deploy if the repo has a PR surface. Finish
 with a short list of what Cohen must still do himself (domain, env vars, print
 specs, any content he needs to supply).
