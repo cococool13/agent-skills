@@ -77,6 +77,8 @@ the grill skills only called a disabled plugin. Restore from
 stay in `~/.agents/parked-not-for-cursor`. Do not copy skills into
 `~/.cursor/skills`. After `npx skills update`, run
 `python3 ~/.agents/skills/maintain-skill-library/scripts/prune-cursor-scan-paths.py`.
+Dated prompt cruft in skills/rules → `/prompt-audit` (do not install
+`anthropics/skills@claude-api`).
 
 ## Keep this current
 
