@@ -8,6 +8,17 @@ description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers (S
 Most of Cohen's live sites are Cloudflare. Read the project's `CLAUDE.md` first —
 it wins on commands, project name, and secrets.
 
+## Host map
+
+| Site | Host |
+| --- | --- |
+| Spiral Collection, spiral-brief, Coastal PharmaCare | Pages |
+| Coastal Hardware New Build, entr-website, JCC Retirement Plan Evaluator, jcc-client-forms, Prize Picks Board (PropScanner) | Workers |
+| JCC SECURE | Firebase |
+| Coastal Hardware (old checkout) | retired |
+| JCC Retirement Plan Evaluator vercel.json | stale; live host is Workers |
+
+
 ## Pick the mode from the repo
 
 | Signal | Mode |

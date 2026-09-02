@@ -36,21 +36,28 @@ def materialize_ego_browser() -> None:
         log(f"materialized ego-browser off {resolved}")
 
 
-def relink_grok_ego_browser() -> None:
-    dest = AGENTS / "ego-browser"
-    if not dest.is_dir():
-        return
+def prune_grok_skill_duplicates() -> None:
+    """Grok already scans ~/.agents/skills via [skills].paths. Do not keep copies here."""
     GROK_SKILLS.mkdir(parents=True, exist_ok=True)
-    grok = GROK_SKILLS / "ego-browser"
-    if grok.is_symlink() or grok.exists():
-        if grok.is_symlink() and grok.resolve() == dest.resolve():
-            return
-        if grok.is_symlink():
-            grok.unlink()
-        else:
-            return
-    grok.symlink_to(dest)
-    log(f"linked {grok} -> {dest}")
+    readme = GROK_SKILLS / "README.md"
+    if not readme.exists():
+        readme.write_text(
+            "# Grok user skills\n\n"
+            "Do not put skill copies here.\n\n"
+            "Grok loads `~/.agents/skills` via `[skills].paths` in `~/.grok/config.toml`.\n"
+        )
+    count = 0
+    for p in list(GROK_SKILLS.iterdir()):
+        if p.name in {"README.md", ".DS_Store"}:
+            continue
+        if p.is_symlink():
+            p.unlink()
+            count += 1
+        elif p.is_dir() and (p / "SKILL.md").exists():
+            # Never rm. Leave real dirs; the prune script archives Cursor dupes.
+            log(f"left real dir in ~/.grok/skills: {p.name}")
+    if count:
+        log(f"removed {count} duplicate ~/.grok/skills symlink(s)")
 
 
 def install_ego_browser_wrapper() -> None:
@@ -118,7 +125,7 @@ def main() -> int:
     materialize_ego_browser()
     apply_ego_browser_description()
     merge_ego_browser_learnings()
-    relink_grok_ego_browser()
+    prune_grok_skill_duplicates()
     install_ego_browser_wrapper()
     sync_cleanup_downloads()
     if not LOG:

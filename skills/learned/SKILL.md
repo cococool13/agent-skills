@@ -66,8 +66,12 @@ sites → `premium-web-build`; browsing/QA → `ego-browser` (mandatory Ego Lite
 `scroll-motion-debug`; hardening → `de-ai-production-pass`; deploy → project
 `CLAUDE.md` then `deploy-cloudflare`; slash `/ship` → commit, push, deploy the
 current repo only (no other projects, no skill-library update); React/Next polish →
-`vercel-react-best-practices` / `web-design-guidelines` / `frontend-design`;
-under-specified work → `grill-me` / `grill-with-docs`.
+`vercel-react-best-practices` / `web-design-guidelines` / `frontend-design`.
+
+Orca (`computer-use`, `orca-cli`, `orchestration`), Diffusion Studio (`editor`,
+`watch`), and Matt Pocock grill stubs are parked — no `orca`/`dapi` binary, and
+the grill skills only called a disabled plugin. Restore from
+`~/.agents/parked-not-for-cursor` if those tools get installed.
 
 `~/.agents/skills/` is canonical for Cursor and Grok. Parked unused adapters
 stay in `~/.agents/parked-not-for-cursor`. Do not copy skills into
