@@ -31,6 +31,8 @@ from lib import (  # noqa: E402
     stash_entries,
     suggest_msg,
 )
+from gitleaks_check import run_preflight  # noqa: E402
+from sync import sync_agent_docs  # noqa: E402
 from worktrees import cleanup_repo, empty_cleanup, format_cleanup, leftover_dirs  # noqa: E402
 
 
@@ -43,7 +45,7 @@ def fetch_one(repo: Path) -> tuple[str, str]:
     return str(repo), tail
 
 
-def inspect(repo: Path, extra_paths: list[Path]) -> dict:
+def inspect(repo: Path, extra_paths: list[Path], *, fast: bool = False) -> dict:
     base = default_base(repo)
     branch = git(repo, "branch", "--show-current") or "(detached)"
     status = parse_status(repo)
@@ -96,8 +98,9 @@ def inspect(repo: Path, extra_paths: list[Path]) -> dict:
 
     for ref in local_refs(repo, base):
         consider(ref, "local")
-    for ref in remote_refs(repo):
-        consider(ref, "remote")
+    if not fast:
+        for ref in remote_refs(repo):
+            consider(ref, "remote")
 
     extras = []
     porcelain = git(repo, "worktree", "list", "--porcelain")
@@ -304,7 +307,7 @@ def human_plan(current: dict | None, actions: list[dict], cleanup: dict) -> str:
     return "\n".join(lines)
 
 
-def build(skip_fetch: bool, plan_only: bool) -> dict:
+def build(skip_fetch: bool, plan_only: bool, *, fast: bool = False) -> dict:
     cur = current_repo()
     fetch_errors: dict[str, str] = {}
     if cur is None:
@@ -322,31 +325,43 @@ def build(skip_fetch: bool, plan_only: bool) -> dict:
         if err:
             fetch_errors[path] = err
 
+    synced: list[dict] = []
     if plan_only:
         cleanup = empty_cleanup()
     else:
+        print("syncing agent docs…", file=sys.stderr)
+        synced = sync_agent_docs(cur)
+        if synced:
+            for row in synced:
+                print(f"  synced {row['path']} from {row['from']}", file=sys.stderr)
         print("cleaning worktrees…", file=sys.stderr)
         cleanup = cleanup_repo(cur)
 
     print("inspecting…", file=sys.stderr)
-    current = inspect(cur, leftover_dirs(cur))
+    current = inspect(cur, leftover_dirs(cur), fast=fast)
+    gitleaks = run_preflight(cur)
+    if not gitleaks.get("ok"):
+        print(f"gitleaks: {gitleaks.get('summary', 'failed')}", file=sys.stderr)
     return {
         "cwd": os.getcwd(),
         "current": current,
         "actions": actions_for(current, True),
         "worktrees": cleanup,
         "fetch_errors": fetch_errors,
+        "synced_docs": synced,
+        "gitleaks": gitleaks,
     }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Plan and apply /ship for the current git repo")
     parser.add_argument("--skip-fetch", action="store_true")
+    parser.add_argument("--fast", action="store_true", help="skip remote branch merge previews")
     parser.add_argument("--plan-only", action="store_true", help="no mutations")
     parser.add_argument("--apply", action="store_true", help="commit, merge, rebase, push (not deploy)")
     parser.add_argument("--json", action="store_true", help="JSON only")
     args = parser.parse_args()
-    payload = build(skip_fetch=args.skip_fetch, plan_only=args.plan_only)
+    payload = build(skip_fetch=args.skip_fetch, plan_only=args.plan_only, fast=args.fast)
     if payload["current"] is None:
         mode = "none"
     elif args.plan_only:
@@ -402,6 +417,9 @@ def main() -> int:
     if payload["current"] is None:
         return 1
     if failed:
+        return 1
+    gl = payload.get("gitleaks") or {}
+    if gl.get("ok") is False and not gl.get("skipped"):
         return 1
     if remaining:
         return 2

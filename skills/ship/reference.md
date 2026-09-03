@@ -47,3 +47,11 @@ Never `--force`.
 ## Deploy
 
 Read this repo's `CLAUDE.md`. Use `deploy-cloudflare` for Pages/Workers. Never assume Vercel. Never bare `wrangler deploy` on a named-env Worker.
+
+Before deploy:
+
+```bash
+bash ~/.agents/skills/gitleaks-preflight/scripts/preflight.sh
+```
+
+If the repo has no `.gitleaks.toml`, run `init-config.sh` first (see `gitleaks-preflight` skill).

@@ -33,9 +33,10 @@ names Vercel as live.
 ## Pre-deploy
 
 1. `git status` — commit or stash first.
-2. Run the project's verify/build gate if documented (`npm run verify:full`,
+2. `bash ~/.agents/skills/gitleaks-preflight/scripts/preflight.sh` — must pass before deploy (Cursor scans the working tree too).
+3. Run the project's verify/build gate if documented (`npm run verify:full`,
    `pnpm build`, etc.).
-3. Confirm Wrangler sees the right account: `npx wrangler whoami`.
+4. Confirm Wrangler sees the right account: `npx wrangler whoami`.
 
 ## Pages (example: spiral-brief, Coastal PharmaCare, Spiral Collection site)
 
@@ -77,7 +78,11 @@ Name vars only; do not print values.
 ## Verify
 
 Open the workers.dev / pages.dev URL from deploy output. Use the `ego-browser`
-skill (Ego Lite / `ego-browser` CLI). Confirm the change on a real page, not just HTTP 200. Do not use Cursor browser MCP as a substitute.
+skill (Ego Lite / `ego-browser` CLI). **Before screenshots**, unminimize the agent
+window — paste `ensureAgentWindow` from `~/.agents/skill-overlays/ego-browser/references/agents.md`
+(or run `bash ~/.agents/skill-overlays/ego-browser/scripts/health-check.sh`).
+`captureScreenshot()` returns a **file path**, not bytes. Confirm the change on a
+real page, not just HTTP 200. Do not use Cursor browser MCP as a substitute.
 
 ## Common failures
 
