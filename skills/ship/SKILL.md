@@ -14,6 +14,8 @@ Scope is the **current git repo only**. Do not fetch, commit, merge, push, clean
 python3 ~/.agents/skills/ship/scripts/ship.py --apply
 ```
 
+Workers with a verify script: `bash ~/.agents/skills/ship/scripts/ship-worker.sh` (ship + gitleaks + `npm run deploy` + verify).
+
 That syncs agent docs from owned worktrees here, fetches this repo, trashes stale owned worktrees, runs gitleaks preflight, classifies dirty files, merge-previews leftover branches, then **itself** commits, merges clean leftovers onto `main`, rebases/ff, and pushes.
 
 If cwd is not a git repo, stop. Do not housekeep elsewhere.

@@ -40,6 +40,8 @@ names Vercel as live.
 
 ## Pages (example: spiral-brief, Coastal PharmaCare, Spiral Collection site)
 
+Pin `wrangler` in `devDependencies` and use `npm run deploy` locally — avoids a fresh `npx` download every deploy. CI may keep `npx wrangler@4` if you prefer.
+
 ```bash
 npm run build   # or pnpm build — use the project's package manager
 npx wrangler pages deploy <outdir> --project-name=<name> --branch=main

@@ -121,10 +121,41 @@ def sync_cleanup_downloads() -> None:
         log(f"synced {dest}")
 
 
+def patch_ego_browser_quickstart() -> None:
+    """Inject ensureAgentWindow into the installed quick-start heredoc."""
+    skill = AGENTS / "ego-browser" / "SKILL.md"
+    snippet_path = OVERLAYS / "ego-browser" / "patches" / "ensure-agent-window.js"
+    if not skill.is_file() or not snippet_path.is_file():
+        return
+    text = skill.read_text()
+    if "async function ensureAgentWindow" in text:
+        return
+    snippet = snippet_path.read_text().rstrip() + "\n"
+    old = (
+        "await openOrReuseTab('https://example.com', { wait: true, timeout: 20 })\n\n"
+        "cliLog(await snapshotText())"
+    )
+    new = (
+        "await openOrReuseTab('https://example.com', { wait: true, timeout: 20 })\n"
+        "await ensureAgentWindow()\n\n"
+        "cliLog(await snapshotText())"
+    )
+    if old not in text:
+        return
+    insert_at = text.find("const task = await useOrCreateTaskSpace")
+    if insert_at == -1:
+        return
+    text = text.replace(old, new, 1)
+    text = text[:insert_at] + snippet + "\n" + text[insert_at:]
+    skill.write_text(text)
+    log("patched ego-browser quick start with ensureAgentWindow")
+
+
 def main() -> int:
     materialize_ego_browser()
     apply_ego_browser_description()
     merge_ego_browser_learnings()
+    patch_ego_browser_quickstart()
     prune_grok_skill_duplicates()
     install_ego_browser_wrapper()
     sync_cleanup_downloads()

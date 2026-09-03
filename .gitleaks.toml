@@ -1,0 +1,37 @@
+# Standard Cohen project allowlists. Safe defaults — tighten if you add new secret file patterns.
+#
+# Path allowlists cover gitignored locals that Cursor/gitleaks --no-git still scans.
+# Generated trees are excluded because they are not authored source.
+
+title = "project"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated and vendored trees — not authored source"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)target/''',
+  '''(^|/)\\.next/''',
+  '''(^|/)out/''',
+  '''(^|/)dist/''',
+  '''(^|/)\\.turbo/''',
+  '''(^|/)coverage/''',
+  '''(^|/)\\.wrangler/''',
+  '''(^|/)\\.claude/worktrees/''',
+  '''(^|/)\.worktrees/''',
+  '''(^|/)worktrees/''',
+]
+
+[[allowlists]]
+description = "Local gitignored secret files — never commit real credentials here"
+paths = [
+  '''(^|/)\.dev\.vars$''',
+  '''(^|/)Secrets\.swift$''',
+  '''(^|/)Secrets\.xcconfig$''',
+  '''(^|/)LocalSecrets\.plist$''',
+  '''(^|/)\.env$''',
+  '''(^|/)\.env\.[^/]+$''',
+  '''(^|/)credentials\.json$''',
+]
