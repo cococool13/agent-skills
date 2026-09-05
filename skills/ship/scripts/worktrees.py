@@ -19,6 +19,7 @@ from lib import (  # noqa: E402
     git_ok,
     git_run,
     owned_rel,
+    parse_worktrees,
 )
 
 
@@ -62,18 +63,7 @@ def empty_cleanup() -> dict:
 
 def process_repo(repo: Path, trash: Path) -> dict:
     result = {"repo": str(repo), "removed": [], "trashed": [], "kept": [], "pruned": False}
-    porcelain = git(repo, "worktree", "list", "--porcelain")
-    trees: list[dict] = []
-    cur: dict = {}
-    for line in porcelain.splitlines():
-        if line.startswith("worktree "):
-            if cur:
-                trees.append(cur)
-            cur = {"path": Path(line[9:])}
-        elif line.startswith("prunable"):
-            cur["prunable"] = True
-    if cur:
-        trees.append(cur)
+    trees = parse_worktrees(repo)
 
     seen: set[Path] = set()
     kept_paths: set[Path] = set()

@@ -1,4 +1,0 @@
-interface:
-  display_name: "JS Test Coverage"
-  short_description: "Run and assess JavaScript test coverage"
-  default_prompt: "Use $javascript-test-coverage to run the relevant tests and show coverage gaps."

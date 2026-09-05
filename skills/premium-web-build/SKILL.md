@@ -28,10 +28,9 @@ look hand-crafted and **never "AI-generated."** Ship polished from the first pas
 | JCC SECURE | **Firebase** |
 | Coastal Hardware (old Next checkout) | **retired** — do not deploy |
 
-Read the project's `AGENTS.md` / `CLAUDE.md` first, then `deploy-cloudflare`.
+Read the project's `CLAUDE.md`, then `deploy-cloudflare`.
 A leftover `netlify.toml` or `vercel.json` is not the live host. Never migrate
-a site between hosts. Use `deploy-vercel` only if that project's `CLAUDE.md`
-still names Vercel as live (none of the live product sites do).
+a site between hosts.
 
 ## Spec discipline (do this first, every time)
 1. **Read the project's brief files COMPLETELY before writing anything** —
@@ -65,13 +64,10 @@ conservative v1. When he does: **build v2 fully separate, never touch v1.** Use 
 separate dir or git worktree; keep both deployable.
 
 ## Deploy / handoff
-Read the project's `AGENTS.md` / `CLAUDE.md` first, then use `deploy-cloudflare`.
-Do not run `netlify deploy --prod` for Spiral. Do not use `deploy-vercel` unless
-that project's `CLAUDE.md` still says the live host is Vercel (none of the live
-product sites do). Do the work here rather than handing off prompts (he hits
-Codex limits) unless asked. When a site is
-"done", run `de-ai-production-pass` before presenting it to a client. End by
-telling him exactly what he still needs to edit (env vars, domain, placeholders).
+Do not run `netlify deploy --prod` for Spiral. Do the work here rather than
+handing off prompts unless asked. When a site is "done", run
+`de-ai-production-pass` before presenting it to a client. End by telling him
+exactly what he still needs to edit (env vars, domain, placeholders).
 
 ## Related skills (don't duplicate)
 - `code-review` — pre-merge quality/security pass.
@@ -88,9 +84,4 @@ interactivity, WebGL shader). Standard loop for these:
    behind text over animated backgrounds; reduce parallax + disable custom cursor
    ≤768px; no horizontal overflow; audio off-by-default with accessible toggle.
 4. QA with `ego-browser`: full-page screenshot at 1280 and 380, verify
-   legibility and no regressions, then commit. Deploy via `deploy-cloudflare`.
-
-## Deploy → use `deploy-cloudflare`
-For shipping these sites, read the project's `AGENTS.md` / `CLAUDE.md` first,
-then use the `deploy-cloudflare` skill. Use `deploy-vercel` only if that
-project's `CLAUDE.md` still names Vercel as live.
+   legibility and no regressions, then commit.

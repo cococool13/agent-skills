@@ -6,22 +6,12 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from lib import AGENT_DOCS, git, owned_rel
+from lib import AGENT_DOCS, owned_rel, parse_worktrees
 from worktrees import leftover_dirs
 
 
 def owned_worktree_paths(repo: Path) -> list[Path]:
-    paths: list[Path] = []
-    porcelain = git(repo, "worktree", "list", "--porcelain")
-    cur: dict = {}
-    for line in porcelain.splitlines():
-        if line.startswith("worktree "):
-            if cur:
-                paths.append(Path(cur["path"]))
-            cur = {"path": line[9:]}
-    if cur:
-        paths.append(Path(cur["path"]))
-
+    paths = [t["path"] for t in parse_worktrees(repo)]
     out: list[Path] = []
     seen: set[Path] = set()
     for p in paths + leftover_dirs(repo):

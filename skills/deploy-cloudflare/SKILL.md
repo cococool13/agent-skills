@@ -1,6 +1,6 @@
 ---
 name: deploy-cloudflare
-description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers (Spiral, Coastal PharmaCare, Coastal Hardware New Build, entr-website, JCC forms/evaluator, PropScanner web). Prefer this over deploy-vercel unless CLAUDE.md says the live host is still Vercel."
+description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers (Spiral, Coastal PharmaCare, Coastal Hardware New Build, entr-website, JCC forms/evaluator, PropScanner web). Read the project's CLAUDE.md first."
 ---
 
 # Deploy to Cloudflare
@@ -27,8 +27,8 @@ it wins on commands, project name, and secrets.
 | `wrangler.jsonc` with `assets.directory` or Worker `main` | **Workers** (static assets or OpenNext/Express) |
 | GitHub Action running `wrangler pages deploy` | Prefer push to `main` if CI already deploys |
 
-Never assume Vercel. `deploy-vercel` is only for repos whose `CLAUDE.md` still
-names Vercel as live.
+Never assume Vercel. Restore `deploy-vercel` from parked only if a project's
+`CLAUDE.md` still names Vercel as live.
 
 ## Pre-deploy
 

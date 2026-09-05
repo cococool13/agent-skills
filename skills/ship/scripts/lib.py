@@ -97,6 +97,23 @@ def default_base(repo: Path) -> str:
     return "HEAD"
 
 
+def parse_worktrees(repo: Path) -> list[dict]:
+    trees: list[dict] = []
+    cur: dict = {}
+    for line in git(repo, "worktree", "list", "--porcelain").splitlines():
+        if line.startswith("worktree "):
+            if cur:
+                trees.append(cur)
+            cur = {"path": Path(line[9:])}
+        elif line.startswith("branch "):
+            cur["branch"] = line[7:]
+        elif line.startswith("prunable"):
+            cur["prunable"] = True
+    if cur:
+        trees.append(cur)
+    return trees
+
+
 def parse_status(repo: Path) -> list[dict]:
     rows = []
     for line in git(repo, "status", "--porcelain", "-uall").splitlines():

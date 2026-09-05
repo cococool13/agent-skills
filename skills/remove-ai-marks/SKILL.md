@@ -21,11 +21,6 @@ Scripts live in this skill’s `scripts/` directory. Resolve `SCRIPTS` to that f
 SCRIPTS="<skill_dir>/scripts"
 python3 "$SCRIPTS/inspect_file.py" ...
 python3 "$SCRIPTS/clean_file.py" ...
-python3 "$SCRIPTS/inspect_text.py" ...
-python3 "$SCRIPTS/clean_text.py" ...
-python3 "$SCRIPTS/inspect_image.py" ...
-python3 "$SCRIPTS/clean_image.py" ...
-python3 "$SCRIPTS/rewrite_text.py" ...
 ```
 
 ## Ethics
@@ -38,7 +33,7 @@ Intended for **your own** content (privacy, hygiene, research). Do not market re
 
 | Input | Path |
 | --- | --- |
-| Pasted / clipboard text | temp file or stdin → text pipeline |
+| Pasted / clipboard text | temp file → text pipeline |
 | `.txt` / code | text Layer A (+ formatter for code) |
 | `.md` / `.html` | container clean (frontmatter/meta) + Layer A |
 | `.png` / `.jpg` / `.jpeg` | image metadata strip |
@@ -50,26 +45,15 @@ Intended for **your own** content (privacy, hygiene, research). Do not market re
 
 ```bash
 python3 "$SCRIPTS/inspect_file.py" --json path
-# or specifically:
-python3 "$SCRIPTS/inspect_text.py" --json path/or/-
-python3 "$SCRIPTS/inspect_image.py" --json image.png
 ```
 
 Show a short summary (suspicious codepoints; C2PA/AI flags).
 
 ### 3. Deterministic clean (always for matching inputs)
 
-**Text — Layer A:**
-
-```bash
-python3 "$SCRIPTS/clean_text.py" INPUT -o OUTPUT --stats
-# optional: --nfkc  --aggressive-homoglyphs
-```
-
-**Any supported file (unified):**
-
 ```bash
 python3 "$SCRIPTS/clean_file.py" INPUT -o OUTPUT
+# text: optional --nfkc  --aggressive-homoglyphs
 python3 "$SCRIPTS/inspect_file.py" OUTPUT   # verify
 ```
 
@@ -89,20 +73,7 @@ Multi-pass recipe:
 
 **Model hygiene:** Prefer a rewrite model **≠ suspected origin** (Claude text → not Claude; Gemini → not Gemini; etc.). Prefer local Ollama when available.
 
-**Optional rewrite hook** (when env configured):
-
-```bash
-# dry-run / CI: print prompt only
-python3 "$SCRIPTS/rewrite_text.py" draft.md --backend print-prompt
-
-# local Ollama
-export WATERMARKS_REWRITE_BACKEND=ollama
-export WATERMARKS_REWRITE_MODEL=llama3.2
-export WATERMARKS_REWRITE_BASE_URL=http://127.0.0.1:11434
-python3 "$SCRIPTS/rewrite_text.py" draft.md -o draft.rewritten.md --strength paraphrase
-```
-
-If the hook is not configured, run the prompts below yourself (agent-orchestrated).
+Run the prompts below yourself (agent-orchestrated).
 
 **Code files:** Prefer formatter (`prettier`, `black`, `gofmt`, …) + Layer A. Offer light rewrite only with explicit user OK.
 
@@ -166,18 +137,8 @@ Always state:
 ## Quick commands cheat sheet
 
 ```bash
-# Unified
 python3 scripts/inspect_file.py notes.md
 python3 scripts/clean_file.py notes.md -o notes.cleaned.md
 python3 scripts/clean_file.py shot.png -o shot.cleaned.png
 python3 scripts/clean_file.py deck.docx -o deck.cleaned.docx
-
-# Text Layer A / B
-python3 scripts/inspect_text.py notes.md
-python3 scripts/clean_text.py notes.md -o notes.cleaned.md --stats
-python3 scripts/rewrite_text.py notes.md --backend print-prompt --strength paraphrase
-
-# Images only
-python3 scripts/inspect_image.py shot.png
-python3 scripts/clean_image.py shot.png -o shot.cleaned.png
 ```

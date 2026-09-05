@@ -89,6 +89,7 @@ SPACE_HOMOGLYPHS: dict[int, str] = {
 }
 
 # Optional confusable Latin lookalikes (aggressive mode only).
+# Cyrillic only — fullwidth Latin (U+FF21–U+FF5A) is NFKC.
 LATIN_CONFUSABLES: dict[int, str] = {
     0x0410: "A",  # Cyrillic
     0x0412: "B",
@@ -109,58 +110,6 @@ LATIN_CONFUSABLES: dict[int, str] = {
     0x0443: "y",
     0x0445: "x",
     0x0456: "i",
-    0xFF21: "A",  # fullwidth
-    0xFF22: "B",
-    0xFF23: "C",
-    0xFF24: "D",
-    0xFF25: "E",
-    0xFF26: "F",
-    0xFF27: "G",
-    0xFF28: "H",
-    0xFF29: "I",
-    0xFF2A: "J",
-    0xFF2B: "K",
-    0xFF2C: "L",
-    0xFF2D: "M",
-    0xFF2E: "N",
-    0xFF2F: "O",
-    0xFF30: "P",
-    0xFF31: "Q",
-    0xFF32: "R",
-    0xFF33: "S",
-    0xFF34: "T",
-    0xFF35: "U",
-    0xFF36: "V",
-    0xFF37: "W",
-    0xFF38: "X",
-    0xFF39: "Y",
-    0xFF3A: "Z",
-    0xFF41: "a",
-    0xFF42: "b",
-    0xFF43: "c",
-    0xFF44: "d",
-    0xFF45: "e",
-    0xFF46: "f",
-    0xFF47: "g",
-    0xFF48: "h",
-    0xFF49: "i",
-    0xFF4A: "j",
-    0xFF4B: "k",
-    0xFF4C: "l",
-    0xFF4D: "m",
-    0xFF4E: "n",
-    0xFF4F: "o",
-    0xFF50: "p",
-    0xFF51: "q",
-    0xFF52: "r",
-    0xFF53: "s",
-    0xFF54: "t",
-    0xFF55: "u",
-    0xFF56: "v",
-    0xFF57: "w",
-    0xFF58: "x",
-    0xFF59: "y",
-    0xFF5A: "z",
 }
 
 # Variation selectors beyond FE0x (VS17–VS256 in Supplementary Special-purpose)
@@ -189,6 +138,13 @@ _BIDI_CPS: frozenset[int] = frozenset(
 _ZW_FAMILY: frozenset[int] = frozenset(
     {0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x180E}
 )
+
+
+def _ascii_latin_nfkc(ch: str) -> str | None:
+    n = unicodedata.normalize("NFKC", ch)
+    if n != ch and n.isascii() and n.isalpha():
+        return n
+    return None
 
 
 def _is_strip_cp(cp: int) -> bool:
@@ -266,7 +222,7 @@ def inspect_text(text: str, *, aggressive: bool = False) -> TextInspectReport:
             kind = _strip_kind(cp)
         elif cp in SPACE_HOMOGLYPHS:
             kind = "space"
-        elif aggressive and cp in LATIN_CONFUSABLES:
+        elif aggressive and (cp in LATIN_CONFUSABLES or _ascii_latin_nfkc(ch)):
             kind = "confusable"
         else:
             cat = unicodedata.category(ch)
@@ -329,6 +285,12 @@ def clean_text(
             replaced[_char_label(ch)] += 1
             out_chars.append(LATIN_CONFUSABLES[cp])
             continue
+        if aggressive_homoglyphs:
+            mapped = _ascii_latin_nfkc(ch)
+            if mapped:
+                replaced[_char_label(ch)] += 1
+                out_chars.append(mapped)
+                continue
         # Other Cf: strip by default for hygiene
         if unicodedata.category(ch) == "Cf" and cp not in SPACE_HOMOGLYPHS:
             removed[_char_label(ch)] += 1

@@ -26,6 +26,7 @@ from lib import (  # noqa: E402
     local_refs,
     merge_preview,
     parse_status,
+    parse_worktrees,
     plans_deploy,
     remote_refs,
     stash_entries,
@@ -103,25 +104,16 @@ def inspect(repo: Path, extra_paths: list[Path], *, fast: bool = False) -> dict:
             consider(ref, "remote")
 
     extras = []
-    porcelain = git(repo, "worktree", "list", "--porcelain")
-    cur: dict = {}
-    trees = []
-    for line in porcelain.splitlines():
-        if line.startswith("worktree "):
-            if cur:
-                trees.append(cur)
-            cur = {"path": line[9:]}
-        elif line.startswith("branch "):
-            cur["branch"] = line[7:]
-        elif line.startswith("prunable"):
-            cur["prunable"] = True
-    if cur:
-        trees.append(cur)
-    for t in trees:
-        p = t.get("path", "")
-        if Path(p).resolve() == repo.resolve():
+    for t in parse_worktrees(repo):
+        p = t["path"]
+        if p.resolve() == repo.resolve():
             continue
-        extras.append(t)
+        row = {"path": str(p)}
+        if "branch" in t:
+            row["branch"] = t["branch"]
+        if t.get("prunable"):
+            row["prunable"] = True
+        extras.append(row)
     for p in extra_paths:
         if str(p.resolve()) not in {e.get("path") for e in extras}:
             extras.append({"path": str(p), "prunable": True})
@@ -396,24 +388,6 @@ def main() -> int:
         sys.stdout.write("\n")
     else:
         print(human_plan(payload["current"], payload["actions"], payload["worktrees"]))
-        print("\n=== JSON ===")
-        json.dump(
-            {
-                "cwd": payload["cwd"],
-                "current": payload["current"]["path"] if payload["current"] else None,
-                "actions": payload["actions"],
-                "worktrees": {
-                    "removed": payload["worktrees"]["removed"],
-                    "kept": payload["worktrees"]["kept"],
-                    "trash": payload["worktrees"]["trash"],
-                },
-                "fetch_errors": payload["fetch_errors"],
-            },
-            sys.stdout,
-            indent=2,
-            default=str,
-        )
-        sys.stdout.write("\n")
     if payload["current"] is None:
         return 1
     if failed:

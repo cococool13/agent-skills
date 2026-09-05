@@ -13,7 +13,7 @@ Invisible or near-invisible characters, exotic spaces, bidi controls, tag charac
 | `space` | NBSP, em space, ideographic space |
 | `confusable` | Cyrillic/fullwidth Latin (aggressive) |
 
-**Removal:** `clean_text.py` / Layer A — deterministic, verifiable.
+**Removal:** `clean_file.py` / Layer A — deterministic, verifiable.
 
 Maps to Nature paper “edit-based watermarking.”
 
@@ -39,7 +39,7 @@ Industry framing (C2PA + SynthID two-layer model; see Institute of AI PM guide i
 
 | Layer | Mechanism | Survives metadata strip? | This project |
 | --- | --- | --- | --- |
-| **Hard-bound C2PA** | Signed manifest *in* the file | No — strip/re-encode drops it | **In scope** — `clean_file` / `clean_image` |
+| **Hard-bound C2PA** | Signed manifest *in* the file | No — strip/re-encode drops it | **In scope** — `clean_file` |
 | **Soft binding** | Imperceptible watermark *in content* that can resolve to a remote manifest | Yes (by design) | **Out of scope** — pixel/audio/video signal |
 | **Standalone SynthID-class** | Pixel / waveform / token watermark without needing C2PA | Yes for media; text is weaker | Media OOS; text → Layer B best-effort |
 
@@ -52,7 +52,7 @@ Industry framing (C2PA + SynthID two-layer model; see Institute of AI PM guide i
 | HTML | Meta generator / JSON-LD / data-ai* |
 | Markdown | YAML frontmatter AI keys |
 
-**Removal:** `clean_file.py` / `clean_image.py` — usually verifiable by re-inspect.
+**Removal:** `clean_file.py` — usually verifiable by re-inspect.
 
 **Honest report:** after a successful C2PA strip, soft-bound / pixel SynthID (if the generator used them) may still be detectable by vendor tools (e.g. SynthID Detector, Content Credentials verify sites).
 

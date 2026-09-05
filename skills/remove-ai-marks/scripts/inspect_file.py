@@ -15,25 +15,36 @@ from image_meta import detect_format as detect_image_format  # noqa: E402
 from image_meta import inspect_image  # noqa: E402
 from text_unicode import human_report, inspect_text  # noqa: E402
 
-TEXT_EXTS = {".txt", ".text", ".md", ".markdown", ".mdx", ".html", ".htm", ".css", ".js", ".py", ".rs", ".go", ".json", ".yaml", ".yml", ".toml", ".csv"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg"}
 CONTAINER_EXTS = {".svg", ".pdf", ".docx", ".odt", ".html", ".htm", ".md", ".markdown", ".mdx"}
+TEXT_EXTS = {
+    ".txt",
+    ".text",
+    ".css",
+    ".js",
+    ".py",
+    ".rs",
+    ".go",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".csv",
+}
 
 
 def classify(path: Path) -> str:
-    if path.suffix.lower() in IMAGE_EXTS:
+    ext = path.suffix.lower()
+    if ext in IMAGE_EXTS:
         return "image"
-    if path.suffix.lower() in CONTAINER_EXTS:
-        # html/md handled as container (metadata + optional text)
+    if ext in CONTAINER_EXTS:
         return "container"
-    if path.suffix.lower() in TEXT_EXTS:
+    if ext in TEXT_EXTS:
         return "text"
-    # magic sniff
-    data = path.read_bytes()[:16]
-    if detect_image_format(data if len(data) >= 8 else path.read_bytes()) in ("png", "jpeg"):
+    data = path.read_bytes()[:4096]
+    if detect_image_format(data) in ("png", "jpeg"):
         return "image"
-    fmt = detect_container_format(path, path.read_bytes()[:4096] if path.stat().st_size else b"")
-    if fmt != "unknown":
+    if detect_container_format(path, data) != "unknown":
         return "container"
     return "text"
 
