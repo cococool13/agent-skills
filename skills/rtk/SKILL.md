@@ -1,6 +1,6 @@
 ---
 name: rtk
-description: "Use when the user asks about RTK, its token-savings reports, or large command output needs compact handling."
+description: "Use when RTK token-savings reports or compact handling of large command output is needed."
 
 ---
 

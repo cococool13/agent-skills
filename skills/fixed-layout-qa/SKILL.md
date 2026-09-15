@@ -1,6 +1,6 @@
 ---
 name: fixed-layout-qa
-description: "Use when creating, revising, or verifying a PDF, slide deck, brochure, report, or other fixed-layout deliverable."
+description: "Use when creating or verifying a PDF, slide deck, brochure, or fixed-layout deliverable."
 
 ---
 

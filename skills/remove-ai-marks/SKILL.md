@@ -1,6 +1,7 @@
 ---
 name: remove-ai-marks
-description: "Use when the user asks to strip watermarks, remove C2PA/Content Credentials, clean AI metadata, remove invisible Unicode, anti-detect clean AI output, or runs /remove-ai-marks (aliases: /remove-claude-marks). Covers Claude, Gemini/SynthID-class, OpenAI provenance, and open-LLM sampling marks across text and common file containers."
+description: "Use when stripping AI watermarks, C2PA, or provenance metadata from files."
+
 ---
 
 # Remove AI marks

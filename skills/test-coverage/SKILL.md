@@ -1,27 +1,22 @@
 ---
 name: test-coverage
-description: "Use when the user asks to run Python tests with coverage or identify untested Python code."
-allowed-tools: Bash(pytest:*, uv:*, python:*, make:*), Read, Grep
+description: "Use when designing tests, investigating test failures, or improving Python, JavaScript, or TypeScript coverage."
+
 ---
 
-# Python Test Coverage
+# Test coverage
 
-## Pick the runner from the repo, in this order
+Router for test/coverage work. Open only the language guide you need.
 
-1. A `make test` target — `Trading Bot` and `PropScanner` both use one; prefer it.
-2. `uv run pytest --cov=src --cov-report=term-missing` — the default for this setup
-   (global rules standardize on uv + Ruff + pytest).
-3. The repo's own documented command if it differs.
+| Language | Guide |
+| --- | --- |
+| Python | `references/python.md` |
+| JavaScript / TypeScript | `references/javascript.md` |
 
-**No project here uses poetry.** Don't run `poetry run` — it will fail with
-"command not found" and waste a turn.
+## Shared rules
 
-## Report
-
-- Overall coverage %, and the delta if a previous run is known.
-- The lowest-coverage files, by percentage.
-- **Untested lines that matter** — error paths, validation, money/order logic —
-  not a flat list of every uncovered line.
-
-Treat coverage as a project-defined gate, not a global percentage target. Do not
-add tests purely to raise the number.
+- Prefer the project's existing scripts and package manager. Do not mix managers or rewrite config unless asked.
+- Run the narrowest useful command first; full suite for release gates or shared-code changes.
+- Report command, pass/fail, lowest-coverage files that matter, and blockers honestly.
+- Coverage is a project gate, not a score to game. Do not lower thresholds to improve a number.
+- Browser/E2E QA is `ego-browser`, not this skill. Performance → `optimize`.

@@ -1,57 +1,24 @@
-# Ship reference
+# Ship command contract
 
-`python3 ~/.agents/skills/ship/scripts/ship.py --apply` runs git in the current repo only. `--plan-only` prints without mutating. Default (no flag) still trashes stale owned worktrees here and drops equivalent local branches / superseded stashes / fast-forwards.
+Run from the active checkout. No-argument execution and `--plan-only` perform local inspection. `--json` includes actions, blockers and scan status. Plan mode cannot establish remote freshness or a clean secret scan.
 
-Ancestor-of-`main` remotes are skipped before merge-tree.
+`--apply` fetches this repository, stops on blockers, scans, commits and pushes the current branch. It does not integrate branches or deploy. A behind-upstream branch must be integrated and validated before apply. The helper rejects an index containing paths outside its commit set. Git hooks run normally. Existing commit identity is preserved.
 
-## File buckets
+`--skip-fetch` is accepted only for plan compatibility. `--fast` is retained for existing callers; every plan now examines only the current branch.
 
-| Bucket | Rule |
-| --- | --- |
-| secret | password/credential/token filenames, `.pem` `.key` `.p12`, `.env` `.env.*`, `credentials.json` |
-| noise | `.DS_Store`, `__pycache__`, `.uizze/live/`, `*.log`, `*.tsbuildinfo`, `.turbo/`, `coverage/`, owned worktree paths, untracked files over 5 MB |
-| archive | untracked files under `_archive/` |
-| commit | everything else. Content matching GitHub PAT / AWS key / PEM headers is unstaged even if the name looks safe. |
+Exit codes: `0` planned Git work completed; `1` blocked or failed; `2` pending work, deployment hint or local-only repository. Exit `0` does not verify deployment. A deploy hint comes from host files and `CLAUDE.md`; consult project instructions for the actual target and CI behavior.
 
-If unsure, skip and name the type only. Never print secret values.
+## File selection
 
-## Leftover branches
+- `secret`: sensitive-looking paths, including `.env*`, credential files and private-key extensions.
+- `noise`: caches, logs, generated noise, owned worktree paths and untracked files over 5 MB.
+- `archive`: untracked `_archive/` content.
+- `commit`: remaining candidates. Review for task relevance before apply.
 
-`git merge-tree --write-tree main <ref>` decides leftover branches in this repo — not `branch --no-merged` and not a blind cherry-pick stack.
+The scanner checks history and working-tree content without exposing captured output or generating configuration. Missing scanner or failure blocks apply. Excluded staged paths block the commit instead of being silently included. The helper does not read candidate file contents itself.
 
-| Preview | Action |
-| --- | --- |
-| Clean merge, no file delta vs `main` | Already contained (squash/rewrite). Drop the local branch. |
-| Clean merge, real file delta | `git merge --no-edit` into `main`. |
-| Conflicts | KEEP. Old cursor/codex branches that would regress `main`. |
+## Integration and housekeeping
 
-Do not `git push --delete` remotes. Do not cherry-pick a long stack of commits that already lost a merge-tree check.
+Textually clean merges do not establish that leftover branches belong in a release. Review and integrate the task branch under project instructions before shipping. Keep unrelated branches, stashes and worktrees intact. The legacy `sync.py` and `worktrees.py` utilities are not called by ship; they are not part of its supported workflow.
 
-## Worktrees
-
-Owned (this repo only): `<repo>/.claude/worktrees/*`, `.worktrees/*`, `<repo>/worktrees/*`.
-
-Leave `~/.cursor/worktrees`. Always run `git worktree remove` from the main checkout. Unique or dirty trees stay.
-
-## Fast-forward / rebase
-
-`pull.rebase` is on. Never `git pull`.
-
-```bash
-git merge --ff-only '@{u}'     # behind only
-git rebase '@{u}'              # diverged (ahead and behind)
-```
-
-Never `--force`.
-
-## Deploy
-
-Read this repo's `CLAUDE.md`. Use `deploy-cloudflare` for Pages/Workers. Never assume Vercel. Never bare `wrangler deploy` on a named-env Worker.
-
-Before deploy:
-
-```bash
-bash ~/.agents/skills/gitleaks-preflight/scripts/preflight.sh
-```
-
-If the repo has no `.gitleaks.toml`, run `init-config.sh` first (see `gitleaks-preflight` skill).
+After any failed or timed-out push, inspect the remote revision before deciding what to do. Do not replay a state-changing external action automatically.

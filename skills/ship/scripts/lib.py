@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import subprocess
@@ -33,30 +32,6 @@ REMOTE_SKIP = re.compile(r"/(HEAD|main|master)$")
 MAX_UNTRACKED = 5 * 1024 * 1024
 
 
-_identity: tuple[str, str] | None | bool = False
-
-
-def github_noreply_identity() -> tuple[str, str] | None:
-    """Commit as GitHub noreply so GH007 cannot block the push. Does not write git config."""
-    global _identity
-    if _identity is not False:
-        return _identity if isinstance(_identity, tuple) else None
-    try:
-        r = subprocess.run(["gh", "api", "user"], capture_output=True, text=True, timeout=20)
-        u = json.loads(r.stdout) if r.returncode == 0 and r.stdout else {}
-        login = str(u.get("login") or "")
-        uid = u.get("id")
-        name = str(u.get("name") or login).strip()
-        if r.returncode != 0 or not login or uid is None:
-            _identity = None
-            return None
-        _identity = (name, f"{uid}+{login}@users.noreply.github.com")
-        return _identity
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, TypeError):
-        _identity = None
-        return None
-
-
 def git_run(
     repo: Path,
     *args: str,
@@ -64,9 +39,6 @@ def git_run(
     env: dict | None = None,
 ) -> subprocess.CompletedProcess:
     cmd = ["git", "-C", str(repo)]
-    ident = github_noreply_identity()
-    if ident:
-        cmd.extend(["-c", f"user.name={ident[0]}", "-c", f"user.email={ident[1]}"])
     cmd.extend(args)
     return subprocess.run(cmd, text=True, capture_output=True, timeout=timeout, env=env)
 
@@ -115,13 +87,19 @@ def parse_worktrees(repo: Path) -> list[dict]:
 
 
 def parse_status(repo: Path) -> list[dict]:
+    result = git_run(repo, "status", "--porcelain=v1", "-z", "-uall")
+    if result.returncode:
+        raise RuntimeError("git status failed")
+    entries = iter(result.stdout.split("\0"))
     rows = []
-    for line in git(repo, "status", "--porcelain", "-uall").splitlines():
-        if len(line) < 4:
+    for entry in entries:
+        if not entry:
             continue
-        xy, rest = line[:2], line[3:]
-        path = rest.split(" -> ", 1)[1] if " -> " in rest else rest
-        rows.append({"path": path, "xy": xy, "untracked": xy == "??"})
+        xy, path = entry[:2], entry[3:]
+        row = {"path": path, "xy": xy, "untracked": xy == "??"}
+        if "R" in xy or "C" in xy:
+            row["source"] = next(entries)
+        rows.append(row)
     return rows
 
 

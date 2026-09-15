@@ -1,6 +1,6 @@
 ---
 name: optimize
-description: "Use when the user asks to make code, configuration, or a script faster, simpler, or less costly to run."
+description: "Use when making code, config, or a script faster, simpler, or less costly to run."
 
 ---
 

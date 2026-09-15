@@ -1,6 +1,7 @@
 ---
 name: deploy-cloudflare
-description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers (Spiral, Coastal PharmaCare, Coastal Hardware New Build, entr-website, JCC forms/evaluator, PropScanner web). Read the project's CLAUDE.md first."
+description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers."
+
 ---
 
 # Deploy to Cloudflare
@@ -13,12 +14,9 @@ it wins on commands, project name, and secrets.
 | Site | Host |
 | --- | --- |
 | Spiral Collection, spiral-brief, Coastal PharmaCare | Pages |
-| Coastal Hardware New Build, entr-website, JCC Retirement Plan Evaluator, jcc-client-forms, Prize Picks Board (PropScanner) | Workers |
+| Coastal Hardware, entr-website, JCC Retirement Plan Evaluator, jcc-client-forms, Prize Picks Board (PropScanner) | Workers |
 | JCC SECURE | Firebase |
 | Coastal Hardware (old checkout) | retired |
-| JCC Retirement Plan Evaluator vercel.json | stale; live host is Workers |
-
-
 ## Pick the mode from the repo
 
 | Signal | Mode |
@@ -27,8 +25,7 @@ it wins on commands, project name, and secrets.
 | `wrangler.jsonc` with `assets.directory` or Worker `main` | **Workers** (static assets or OpenNext/Express) |
 | GitHub Action running `wrangler pages deploy` | Prefer push to `main` if CI already deploys |
 
-Never assume Vercel. Restore `deploy-vercel` from parked only if a project's
-`CLAUDE.md` still names Vercel as live.
+Never assume Vercel. There is no Vercel deploy skill on this stack.
 
 ## Pre-deploy
 
@@ -50,7 +47,7 @@ npx wrangler pages deploy <outdir> --project-name=<name> --branch=main
 Typical names: `spiraldemo`, `coastal-pharmacare`, `spiral-collection`. Output
 dirs are usually `dist` or `out` — read `CLAUDE.md` / `wrangler.jsonc`.
 
-## Workers static assets (Coastal Hardware New Build, entr-website)
+## Workers static assets (Coastal Hardware, entr-website)
 
 ```bash
 npx wrangler deploy

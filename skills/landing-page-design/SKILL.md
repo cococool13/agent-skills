@@ -1,9 +1,8 @@
 ---
 name: landing-page-design
-description: "Use when creating, editing, reviewing, or writing copy for a landing page, marketing site, or conversion-focused web section."
+description: "Use when creating or revising a landing page, marketing site, or conversion section."
 
 ---
-
 # Landing Page Design
 
 A landing page is not a homepage. A homepage serves multiple intents. A landing page wins one intent:
@@ -14,9 +13,12 @@ This skill has two halves. **Part A** decides what the page says and how it is s
 
 ## Scope
 
-Apply to all web UI work: landing pages, marketing sites, components, dashboards, prototypes, and design reviews. When a rule here conflicts with a framework default, this file wins. When the user's explicit prompt conflicts with a rule, the user wins.
+Landing pages, marketing sites, and conversion-focused web sections only. Product UI, dashboards, and general components belong to `impeccable` / `premium-web-build` / project design rules. When the user's explicit prompt conflicts with a rule here, the user wins.
 
-**Companion skill.** For upgrading an *existing* site rather than building a new one, use `redesign-existing-projects` ([github.com/elayadesign/redesign-skill](https://github.com/elayadesign/redesign-skill)). It diagnoses generic patterns and defers to this file for every concrete value.
+**Existing sites.** Prefer `de-ai-production-pass` or `impeccable` for upgrading an existing site rather than applying this skill as a full redesign.
+
+
+**Part B (visual system):** load `references/visual-system.md` only after Part A strategy is set.
 
 ---
 
@@ -70,7 +72,7 @@ If the user cannot answer, make a reasonable assumption, state it in one line, a
 11. Risk reversal, trial, cancel anytime, guarantee
 12. Final CTA, identical to the top
 
-Include the mandatory tagline reveal section from B11 somewhere in the mid page argument, typically right after the hero or after benefits.
+If the brief allows a tagline reveal, use B11 somewhere in the mid page argument, typically right after the hero or after benefits.
 
 ## A3. Layout selection
 
@@ -143,66 +145,3 @@ Never rebuild the whole page on each iteration. Section by section keeps control
 - No clear next step
 
 ---
-
-
-# PART B — Visual system
-
-**Read [`references/visual-system.md`](references/visual-system.md) before writing any
-styles, and keep it open while you build.** It holds every binding visual value:
-
-- **B1** typefaces, copy rules, the Tailwind type scale, button type
-- **B2** the spacing table · **B3** the nested-radius formula
-- **B4** borders and dark-mode backgrounds · **B5** hero heading gradient and 680px caps
-- **B6** icon sets · **B7** motion easing, island nav, scroll interpolation
-- **B8** content realism · **B9** required states · **B10** ship requirements
-- **B11** the mandatory tagline reveal section
-
-Do not invent a font size, spacing value, radius, colour, or easing curve that is not in
-that file. If a value you need is absent, snap to the nearest listed value rather than
-introducing a new one.
-
----
-
-# Output format
-
-When generating a landing page from scratch, return these in order before writing code:
-
-1. **Page outline** — sections and their order
-2. **Hero copy** — headline, subheadline, CTA, proof line
-3. **Benefits** — three to five outcome driven bullets
-4. **How it works** — three steps
-5. **FAQ** — six to twelve questions and answers
-6. **SEO / AEO** — index or noindex recommendation, plus title and meta if indexed
-7. **Layout recommendation** — A, B, C, or D, and why
-
-Then build section by section per A6.
-
----
-
-# Quick checklist
-
-**Strategy**
-- [ ] One offer, one audience, one primary action
-- [ ] No competing CTAs above the fold
-- [ ] Specific numbers instead of vague verbs
-- [ ] At least one risk reversal
-- [ ] Proof sits next to the claim it supports
-- [ ] Layout type chosen deliberately
-
-**Visual**
-- [ ] Single approved typeface, no italics, no ultra bold
-- [ ] No hyphens in copy, no orphaned words
-- [ ] Every font size lands on a Tailwind scale step
-- [ ] Every spacing value comes from the spacing table
-- [ ] Nested radii follow the formula
-- [ ] No single sided card borders, no background gradients
-- [ ] Hero heading and subheading capped at 680px with meaningful line breaks
-- [ ] Icons from Phosphor, Solar, or Iconamoon
-- [ ] Every transition uses a custom cubic bezier, scroll reveals use IntersectionObserver
-- [ ] Tagline reveal section present, minimum two lines, words activate one at a time on scroll
-
-**Content and ship**
-- [ ] No Lorem Ipsum, no placeholder brands, no AI cliches, no round fake numbers
-- [ ] Hover, active, focus, loading, empty, and error states all present
-- [ ] No dead links, current nav item indicated
-- [ ] 404, legal links, form validation, favicon, meta tags, alt text

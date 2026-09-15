@@ -9,10 +9,17 @@ from pathlib import Path
 HOME = Path.home()
 AGENTS = HOME / ".agents" / "skills"
 OVERLAYS = HOME / ".agents" / "skill-overlays"
+DESCRIPTIONS = OVERLAYS / "descriptions"
 SCRIPTS = HOME / "scripts"
 GROK_SKILLS = HOME / ".grok" / "skills"
 BIN = HOME / ".local" / "bin"
 LOG: list[str] = []
+
+# Nested skill path map for description overlays named parent__child.txt
+NESTED_SKILL_PATHS = {
+    "letsfg__flight-search": AGENTS / "letsfg" / "skills" / "flight-search" / "SKILL.md",
+    "letsfg__hotel-search": AGENTS / "letsfg" / "skills" / "hotel-search" / "SKILL.md",
+}
 
 
 def log(msg: str) -> None:
@@ -54,7 +61,6 @@ def prune_grok_skill_duplicates() -> None:
             p.unlink()
             count += 1
         elif p.is_dir() and (p / "SKILL.md").exists():
-            # Never rm. Leave real dirs; the prune script archives Cursor dupes.
             log(f"left real dir in ~/.grok/skills: {p.name}")
     if count:
         log(f"removed {count} duplicate ~/.grok/skills symlink(s)")
@@ -73,22 +79,65 @@ def install_ego_browser_wrapper() -> None:
     log(f"installed ego-browser wrapper at {dest}")
 
 
+def _replace_description(skill: Path, desc: str) -> bool:
+    """Replace any description form (quoted, folded >, or leftover indented lines)."""
+    if not skill.is_file():
+        return False
+    text = skill.read_text()
+    if not text.startswith("---"):
+        return False
+    end = text.find("\n---", 3)
+    if end < 0:
+        return False
+    fm = text[3:end]
+    body = text[end:]
+    safe = desc.replace("\\", "\\\\").replace('"', '\\"')
+    new_fm, n = re.subn(
+        r"(?ms)^description:.*?(?=^[A-Za-z0-9_-]+:|\Z)",
+        f'description: "{safe}"\n',
+        fm,
+        count=1,
+    )
+    if not n:
+        return False
+    skill.write_text("---" + new_fm + body)
+    return True
+
+
 def apply_ego_browser_description() -> None:
     skill = AGENTS / "ego-browser" / "SKILL.md"
     overlay = OVERLAYS / "ego-browser" / "description.txt"
     if not skill.is_file() or not overlay.is_file():
         return
-    text = skill.read_text()
     desc = overlay.read_text().strip()
-    new_text, n = re.subn(
-        r"(?m)^description:\s*.+$",
-        f'description: "{desc}"',
-        text,
-        count=1,
-    )
-    if n:
-        skill.write_text(new_text)
+    if _replace_description(skill, desc):
         log(f"patched ego-browser description ({len(desc)} chars)")
+
+
+def apply_description_overlays() -> None:
+    """Apply short Use-when descriptions from skill-overlays/descriptions/."""
+    if not DESCRIPTIONS.is_dir():
+        return
+    applied = 0
+    for path in sorted(DESCRIPTIONS.glob("*.txt")):
+        name = path.stem
+        desc = path.read_text().strip()
+        if not desc:
+            continue
+        if name in NESTED_SKILL_PATHS:
+            skill = NESTED_SKILL_PATHS[name]
+        else:
+            skill = AGENTS / name / "SKILL.md"
+        if skill.parent.is_symlink():
+            log(f"skip app-owned description: {name}")
+            continue
+        if _replace_description(skill, desc):
+            applied += 1
+            log(f"patched {name} description ({len(desc)} chars)")
+        elif not skill.is_file():
+            log(f"skip description overlay (missing skill): {name}")
+    if applied:
+        log(f"applied {applied} description overlay(s)")
 
 
 def merge_ego_browser_learnings() -> None:
@@ -151,13 +200,103 @@ def patch_ego_browser_quickstart() -> None:
     log("patched ego-browser quick start with ensureAgentWindow")
 
 
+
+def patch_ego_browser_lean() -> None:
+    """Move workflow/caveats to references; condense task-space prose; fix Bash wording."""
+    import re
+    skill = AGENTS / "ego-browser" / "SKILL.md"
+    if not skill.is_file():
+        return
+    text = skill.read_text()
+    changed = False
+    refs = skill.parent / "references"
+    refs.mkdir(exist_ok=True)
+    for header, fname in [
+        ("## Recommended workflow", "workflows.md"),
+        ("## Caveats", "caveats.md"),
+    ]:
+        if header not in text:
+            continue
+        m = re.search(rf"(^{re.escape(header)}\n.*?)(?=^## |\Z)", text, re.M | re.S)
+        if not m:
+            continue
+        (refs / fname).write_text(m.group(1).rstrip() + "\n")
+        text = text[: m.start()] + text[m.end() :]
+        changed = True
+        log(f"ego-browser: extracted {fname}")
+    if "Use the `Bash` tool" in text:
+        text = text.replace(
+            "Use the `Bash` tool to run",
+            "Use your shell tool (`Shell` in Cursor) to run",
+        )
+        changed = True
+    if "### Task spaces" in text and "prefer numeric `task.id`" not in text:
+        m = re.search(r"(^### Task spaces\n.*?)(?=^### |\Z)", text, re.M | re.S)
+        if m:
+            new_ts = (
+                "### Task spaces\n\n"
+                "Isolated browsing context; inherits user login state. "
+                "Reuse one space across heredoc rounds via `useOrCreateTaskSpace(nameOrId)` "
+                "(prefer numeric `task.id`). New space only for an unrelated goal.\n\n"
+                "Ownership: agent / agentDelegatedToUser / user. User-owned spaces: "
+                "`switchTaskSpace` throws; `claimTaskSpace` claims; "
+                "`handOff`/`complete(..., {keep:true})` skip; "
+                "`complete(..., {keep:false})` claims then closes.\n\n"
+                "`completeTaskSpace(nameOrId, { keep })` must be its own final heredoc "
+                "after the task is confirmed done. Default `{ keep: false }`. "
+                "Use `{ keep: true }` only when the user needs the live page.\n\n"
+            )
+            text = text[: m.start()] + new_ts + text[m.end() :]
+            changed = True
+            log("ego-browser: condensed Task spaces")
+    if "references/workflows.md" not in text and "## Common helpers" in text:
+        text = text.replace(
+            "## Common helpers\n",
+            "## Common helpers\n\n"
+            "Details: `references/workflows.md`, `references/caveats.md`, "
+            "and Cohen overlay `~/.agents/skill-overlays/ego-browser/references/agents.md`.\n",
+            1,
+        )
+        changed = True
+    if changed:
+        skill.write_text(text)
+
+
+def patch_emil_design_eng_body() -> None:
+    """Strip canned greeting / promo stall that fights AGENTS execute-first."""
+    skill = AGENTS / "emil-design-eng" / "SKILL.md"
+    if not skill.is_file():
+        return
+    text = skill.read_text()
+    if "## Initial Response" not in text:
+        return
+    start = text.find("## Initial Response")
+    end = text.find("## The Animation Decision Framework")
+    if start < 0 or end < 0:
+        return
+    replacement = (
+        "You are a design engineer with Emil Kowalski craft sensibility. "
+        "Build interfaces where unseen details compound. Prefer concrete fixes over philosophy.\n\n"
+        "## Review format\n\n"
+        "Review findings go in one `Before | After | Why` markdown table, one row per issue.\n\n"
+    )
+    skill.write_text(text[:start] + replacement + text[end:])
+    log("patched emil-design-eng: removed Initial Response stall")
+
+
 def main() -> int:
-    materialize_ego_browser()
-    apply_ego_browser_description()
-    merge_ego_browser_learnings()
-    patch_ego_browser_quickstart()
+    # Ego's app-owned skill follows the installed runtime. Never rewrite that bundle.
+    app_owned_ego = (AGENTS / "ego-browser").is_symlink()
+    if not app_owned_ego:
+        apply_ego_browser_description()
+        merge_ego_browser_learnings()
+        patch_ego_browser_quickstart()
+        patch_ego_browser_lean()
+    apply_description_overlays()
+    patch_emil_design_eng_body()
     prune_grok_skill_duplicates()
-    install_ego_browser_wrapper()
+    if not app_owned_ego:
+        install_ego_browser_wrapper()
     sync_cleanup_downloads()
     if not LOG:
         log("(no overlay patches applied)")

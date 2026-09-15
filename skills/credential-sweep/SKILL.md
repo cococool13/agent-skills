@@ -1,6 +1,6 @@
 ---
 name: credential-sweep
-description: "Use when work identifies credential-bearing local files or configuration, or when the user asks to scan for exposed secrets."
+description: "Use when scanning for exposed secrets or handling credential-bearing local files."
 
 ---
 

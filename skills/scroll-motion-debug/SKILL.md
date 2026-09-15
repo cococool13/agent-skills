@@ -1,6 +1,7 @@
 ---
 name: scroll-motion-debug
 description: "Use when diagnosing or fixing scroll-animation, pinning, layout, or section-transition bugs."
+disable-model-invocation: true
 
 ---
 

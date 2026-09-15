@@ -1,53 +1,49 @@
 ---
 name: ship
-description: Slash-only current-repo ship. Use when Cohen runs /ship or asks to commit, push, and deploy the project this session is working in.
+description: "Commit, push, and deploy the current project when Cohen invokes /ship."
 disable-model-invocation: true
 ---
 
 # Ship
 
-Slash `/ship` is the approval. Run immediately. Do not re-plan by hand.
+An invocation of `/ship` authorizes commit, push, and deployment for the active project, subject to project instructions and any narrower request. A request to edit or audit this skill does not authorize shipping.
 
-Scope is the **current git repo only**. Do not fetch, commit, merge, push, clean, or deploy any other repo. Do not update the skill library.
+Work in the current Git checkout only. Read its applicable `AGENTS.md` and `CLAUDE.md` before changes. If cwd is not a repository, stop and identify the missing project.
+
+## Prepare
+
+Inspect the branch, status and relevant diff. Select only task-related changes; the helper's file buckets are exclusions, not proof of relevance. If unrelated files would enter its commit set, commit the intended paths explicitly and use the helper only for inspection; finish the authorized push directly with an explicit remote and branch after the checks below.
 
 ```bash
-python3 ~/.agents/skills/ship/scripts/ship.py --apply
+python3 ~/.agents/skills/ship/scripts/ship.py --plan-only --json
 ```
 
-That syncs agent docs from owned worktrees here, fetches this repo, trashes stale owned worktrees, runs gitleaks preflight, classifies dirty files, merge-previews leftover branches, then **itself** commits, merges clean leftovers onto `main`, rebases/ff, and pushes.
+The plan uses local refs and does not fetch, scan, copy docs, clean worktrees or integrate leftover branches. See [reference.md](reference.md) for the command contract and exclusions.
 
-If cwd is not a git repo, stop. Do not housekeep elsewhere.
+If the project requires integration into its release branch, integrate only the task's changes, respecting active worktrees and project rules. Run the project's required build, tests and checks against the final code before pushing. Fix failures locally. If apply fetches newer upstream commits, it stops so you can integrate and repeat affected validation first.
 
-Exit: `0` git + gitleaks clean, `2` work remains (usually deploy), `1` git or gitleaks failed.
+## Apply
 
-## Flags
+Once the commit set and final code are verified:
 
-| Flag | Use |
-| --- | --- |
-| `--apply` | Commit, merge, rebase, push in this repo |
-| `--plan-only --skip-fetch` | Recheck after apply; no mutations |
-| `--fast` | Skip remote branch merge previews (current branch + local leftovers only) |
+```bash
+python3 ~/.agents/skills/ship/scripts/ship.py --apply --json
+```
 
-## Hard stops
+Apply fetches, requires a passing gitleaks preflight, commits the selected bucket and pushes the current branch to its explicit upstream destination. It stops on failure. It preserves commit identity and performs no branch/stash deletion, worktree cleanup, doc copying or automatic leftover merges.
 
-- Never force-push, `--no-verify`, or amend unless Cohen asked.
-- Never print secret values. Never stage `skip-files`.
-- Never delete a KEEP ref or a dirty/unique worktree.
-- Never permanently delete — Trash only.
-- Never bare `wrangler deploy` on a named-env Worker.
-- Never assume Vercel. Read this repo's `CLAUDE.md`, then `deploy-cloudflare`.
-- On failure: do not retry push/deploy.
+For a direct push outside the helper, run `gitleaks-preflight` first. On a failed scan, use that skill to inspect redacted findings; allowlist only confirmed false positives. Never print secret values or read credential/environment files into agent context. Do not weaken a scan just to pass it.
 
-## After the script
+Never force-push, bypass hooks or amend unless Cohen explicitly asks. Inspect a failed operation before continuing. Do not automatically retry a push or deploy, including by rerunning the full helper after an uncertain result.
 
-The script does not deploy. You do:
+## Deploy and verify
 
-1. If gitleaks failed: run `bash ~/.agents/skills/gitleaks-preflight/scripts/preflight.sh`, fix allowlists or secrets, then re-run ship.
-2. If the plan has `deploy`: `mode=ci` after a `main` push → report CI, do not also wrangler. `mode=manual` → this repo's `CLAUDE.md` + `deploy-cloudflare`, gitleaks preflight again, then `ego-browser` on the live URL with `ensureAgentWindow` before screenshots (see `ego-browser` overlay `references/agents.md`). If ego-browser cannot connect, say so and stop verifying.
-3. Re-run `ship.py --plan-only --skip-fetch`. Remaining git ops mean the apply pass failed — fix those, do not ignore them. KEEP refs stay.
+The helper does not deploy. Its deploy hint is not authoritative: read the project's deployment instructions even when no hint appears.
 
-## Report
+For Cloudflare, use `deploy-cloudflare`; honor a different provider only when project instructions specify it. Preserve named Worker environments. Confirm whether CI deploys the exact pushed branch and revision; track that run to success instead of also deploying manually. A queued run is pending, not shipped. For manual deployment, scan the final deployment inputs, then deploy once using the project's command.
 
-- **Shipped** — this repo, commit, push, deploy (CI vs wrangler vs skipped), URL
-- **Cleaned** — doc syncs, commits/merges/pushes the script applied, worktrees trashed here
-- **Still open** — KEEP refs, gitleaks hits, secrets/noise left, local-only, failures
+Check the live result with `ego-browser` / Ego Lite. If it cannot connect, report that browser QA was skipped and finish the remaining verification.
+
+Recheck local Git status and upstream revision without reapplying. Confirm the pushed commit and deployment result independently; a persistent deploy hint is not evidence that another deploy is needed.
+
+Report the project, commit, push destination, deployment status and URL, checks and results, plus anything blocked or unverified. Use “shipped” only for the outcomes actually confirmed.

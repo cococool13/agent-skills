@@ -1,6 +1,7 @@
 ---
 name: gitleaks-preflight
-description: Use before commit, push, or deploy when gitleaks or Cursor secret scans block work. Runs a repo-scoped scan with sensible allowlists.
+description: "Use before commit, push, or deploy when gitleaks or secret scans block work."
+
 ---
 
 # Gitleaks preflight

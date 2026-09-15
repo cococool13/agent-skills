@@ -1,6 +1,7 @@
 ---
 name: maintain-skill-library
-description: "Use when auditing, cleaning up, optimizing, documenting, or validating an installed skill collection, especially when triggers overlap or the user asks about all skills."
+description: "Use when auditing or maintaining the installed skill library."
+
 ---
 
 # Maintain Skill Library
@@ -16,10 +17,14 @@ Keep the live skill system predictable, lean, and safe to update.
 | Local overlays | `~/.agents/skill-overlays/` | `post-update-patches.py` after every update |
 | In-place only | `qcc1-agentic-trading` stub | manual |
 
-Weekly: LaunchAgent `com.cococool.skills-update` runs `update-skills.sh`:
-update → post-update patches → prune scan-path duplicates.
+Weekly: LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
+from `~/Projects/Agent Skills/skills/maintain-skill-library/`:
+update → local overlays → conflict-checked instruction edits → prune scan-path duplicates.
+The source checkout and `~/.agents/skill-overlays/instruction-edits.json` preserve
+local repairs across upstream updates. An override conflict fails the update and
+requires review instead of replacing changed upstream text blindly.
 
-Edit personal skills in `~/Projects/agent-skills`, push to GitHub, then run the
+Edit personal skills in `~/Projects/Agent Skills`, push to GitHub, then run the
 update script (or wait for Sunday 10:00).
 
 ## 1. Establish ownership

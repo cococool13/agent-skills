@@ -1,50 +1,31 @@
 ---
 name: de-ai-production-pass
-description: "Use when an existing website needs a final production, handoff, or de-AI quality pass before release. Not for prose editing (no-ai-slop), code deslop (ai-slop-cleaner), or watermark stripping (remove-ai-marks)."
+description: "Use when an existing site needs a final production or de-AI pass before release."
 
 ---
 
 # De-AI Production Pass
 
-The recurring "make it real and sellable" pass for client work (Coastal
-Hardware, Coastal PharmaCare, Spiral, print/signage packages, etc.). Cohen
-pitches these as paid engagements, so the bar is a polished, human-looking,
-production product.
-Run every check in the sections below. A pass that skips a listed check is not done.
+Final "make it real and sellable" pass for client work. Report each check as fixed or confirmed absent.
 
-**Branches:** websites run all four sections; non-web artifacts (print PDFs,
-docs, decks) run sections 1 and 4 only.
+**Branches:** websites run all four sections; non-web artifacts (print PDFs, docs, decks) run sections 1 and 4 only.
 
-## 1. De-AI audit (make it not look AI-generated)
-- Kill generic AI tells: uniform card grids, emoji bullets (or any emoji in
-  print artifacts), letter-spaced ALL-CAPS eyebrow labels, decorative
-  alternating accent colors, "Lorem"/placeholder copy, purple-gradient hero
-  clichés, centered everything, stocky filler text.
-- Use the real brand: keep and **enhance** the existing logo and photos (sharpen
-  same images — do NOT replace them with new/generated ones).
-- Restore the original/intended fonts; vary rhythm, spacing, and section layouts
-  so it reads hand-designed. Real business info stays; only layout/feel improves.
-- Done when every tell above is either fixed or confirmed absent — not when the
-  surface "looks better."
+## 1. De-AI audit
 
-## 2. Production hardening (run every check, verify output)
-- Upgrade dependencies to latest stable; remove dead files and legacy visual
-  artifacts; keep the bundle genuinely lightweight.
-- Lighthouse/perf: image optimization (correct sizes, lazy, modern formats),
-  no layout shift, fast LCP. Accessibility: contrast, alt text, keyboard, focus.
-- Responsive verification at 380 / 768 / 1280 via `ego-browser` (screenshots
-  desktop + mobile). Fix horizontal overflow and motion issues on mobile.
-- SEO/meta: title, description, OG tags, favicon, sitemap.
-- Hero check: the **company name** (not the tagline) is the unmistakable focus.
+Kill generic AI tells: uniform card grids, emoji bullets, letter-spaced ALL-CAPS eyebrows, decorative alternating accents, placeholder copy, purple-gradient hero clichés, centered-everything, stocky filler. Keep and enhance existing logo/photos — do not replace with generated assets. Restore intended fonts; vary rhythm so it reads hand-designed. Real business info stays.
+
+## 2. Production hardening
+
+- Remove dead files and legacy visual artifacts; keep the bundle light. Upgrade dependencies only when the brief or project `CLAUDE.md` asks.
+- Perf/a11y: image sizes/lazy/modern formats, no layout shift, contrast, alt, keyboard, focus.
+- Responsive verification at 380 / 768 / 1280 via `ego-browser`.
+- SEO/meta: title, description, OG, favicon, sitemap.
+- Hero: company name (not tagline) is the focus.
 
 ## 3. Real content swap
-Replace placeholders with real client details when given (e.g. phone, email,
-pricing). Make precise, surgical edits — change only what was specified, keep
-everything else (a recurring correction: "keep X, only change Y").
+
+Replace placeholders with real client details when given. Surgical edits only.
 
 ## 4. Handoff
-Preserve originals (`_archive/`) before replacing deliverables. Commit per step
-where there's a repo. Write `CHANGES.md` documenting what changed. Websites:
-read the project CLAUDE.md, then `deploy-cloudflare`. Use Grok `/review` before final deploy if the repo has a PR surface. Finish
-with a short list of what Cohen must still do himself (domain, env vars, print
-specs, any content he needs to supply).
+
+Preserve originals (`_archive/`) before replacing deliverables. Commit when there is a repo. Write `CHANGES.md`. Websites: project `CLAUDE.md` then `deploy-cloudflare`. Optional Grok `/review` before final deploy if there is a PR surface. End with what Cohen must still do (domain, env, print specs, missing content).

@@ -89,15 +89,38 @@ def prune_commands(dest_dir: Path, log: list[str]) -> None:
             retire(p, dest_dir, log)
 
 
+def resolves_into_agents(path: Path) -> bool:
+    """True when a symlink resolves under the canonical agents library."""
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    try:
+        resolved.relative_to(AGENTS.resolve())
+        return True
+    except ValueError:
+        return False
+
+
 def prune_broken_cursor_links(dest_dir: Path, log: list[str]) -> None:
+    """Retire broken links and real duplicate dirs in ~/.cursor/skills.
+
+    Keep symlinks that resolve into ~/.agents/skills — those are the
+    Sync Skills / cloud sync source (one live copy, not a second library).
+    """
     if not CURSOR.is_dir():
         return
+    names = agent_names()
     for p in list(CURSOR.iterdir()):
         if p.name in KEEP_IN_VIEWS or p.name == "README.md":
             continue
-        if p.is_symlink() and not p.resolve().exists():
-            retire(p, dest_dir, log)
-        elif p.name in agent_names():
+        if p.is_symlink():
+            if not p.resolve().exists():
+                retire(p, dest_dir, log)
+            elif not resolves_into_agents(p):
+                retire(p, dest_dir, log)
+            continue
+        if p.name in names and p.is_dir():
             retire(p, dest_dir, log)
 
 
@@ -115,9 +138,13 @@ def pin_lockfile(log: list[str]) -> None:
 def write_view_readmes() -> None:
     cursor_readme = """# Cursor user skills
 
-Do not put skill copies here.
+Canonical library: `~/.agents/skills`.
 
-Cursor already loads:
+For Cursor Cloud / Sync Skills, keep **symlinks** here that point into
+`~/.agents/skills` (not real copies). Weekly prune keeps those links and
+only retires broken links or duplicate real directories.
+
+Also loaded:
 
 - `~/.agents/skills` — personal and source-managed skills (canonical)
 - `~/.cursor/skills-cursor` — Cursor built-ins (managed by Cursor)
