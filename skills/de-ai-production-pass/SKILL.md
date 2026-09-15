@@ -28,4 +28,4 @@ Replace placeholders with real client details when given. Surgical edits only.
 
 ## 4. Handoff
 
-Preserve originals (`_archive/`) before replacing deliverables. Commit when there is a repo. Write `CHANGES.md`. Websites: project `CLAUDE.md` then `deploy-cloudflare`. Optional Grok `/review` before final deploy if there is a PR surface. End with what Cohen must still do (domain, env, print specs, missing content).
+Preserve originals (`_archive/`) before replacing deliverables. Commit when there is a repo. Write `CHANGES.md`. Websites: project `CLAUDE.md` then `deploy-cloudflare`. Optional Grok `/review` before final deploy if there is a PR surface. End with what the user must still do (domain, env, print specs, missing content).

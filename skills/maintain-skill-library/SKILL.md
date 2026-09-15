@@ -8,7 +8,9 @@ description: "Use when auditing or maintaining the installed skill library."
 
 Keep the live skill system predictable, lean, and safe to update.
 
-## Cohen stack (canonical)
+Adapt paths and schedule names to your machine. The table below is how the author runs it.
+
+## Example stack (this repo's author)
 
 | Layer | Location | Auto-update |
 | --- | --- | --- |
@@ -24,8 +26,8 @@ The source checkout and `~/.agents/skill-overlays/instruction-edits.json` preser
 local repairs across upstream updates. An override conflict fails the update and
 requires review instead of replacing changed upstream text blindly.
 
-Edit personal skills in `~/Projects/Agent Skills`, push to GitHub, then run the
-update script (or wait for Sunday 10:00).
+Edit personal skills in your checkout of this repo (author path: `~/Projects/Agent Skills`), push to GitHub, then run the
+update script (or the author's weekly Sunday job).
 
 ## 1. Establish ownership
 

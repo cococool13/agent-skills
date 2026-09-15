@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Commit, push, and deploy the current project when Cohen invokes /ship."
+description: "Commit, push, and deploy the current project when the user invokes /ship."
 disable-model-invocation: true
 ---
 
@@ -34,7 +34,7 @@ Apply fetches, requires a passing gitleaks preflight, commits the selected bucke
 
 For a direct push outside the helper, run `gitleaks-preflight` first. On a failed scan, use that skill to inspect redacted findings; allowlist only confirmed false positives. Never print secret values or read credential/environment files into agent context. Do not weaken a scan just to pass it.
 
-Never force-push, bypass hooks or amend unless Cohen explicitly asks. Inspect a failed operation before continuing. Do not automatically retry a push or deploy, including by rerunning the full helper after an uncertain result.
+Never force-push, bypass hooks or amend unless the user explicitly asks. Inspect a failed operation before continuing. Do not automatically retry a push or deploy, including by rerunning the full helper after an uncertain result.
 
 ## Deploy and verify
 

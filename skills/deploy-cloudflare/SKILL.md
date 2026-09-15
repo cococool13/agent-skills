@@ -1,15 +1,15 @@
 ---
 name: deploy-cloudflare
-description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers."
+description: "Use when deploying sites to Cloudflare Pages or Workers."
 
 ---
 
 # Deploy to Cloudflare
 
-Most of Cohen's live sites are Cloudflare. Read the project's `CLAUDE.md` first —
-it wins on commands, project name, and secrets.
+Default hosting for this pack is Cloudflare. Read the project's `CLAUDE.md` / `AGENTS.md` first —
+they win on commands, project name, and secrets.
 
-## Host map
+## Example host map (author's projects — replace with yours)
 
 | Site | Host |
 | --- | --- |
@@ -17,6 +17,7 @@ it wins on commands, project name, and secrets.
 | Coastal Hardware, entr-website, JCC Retirement Plan Evaluator, jcc-client-forms, Prize Picks Board (PropScanner) | Workers |
 | JCC SECURE | Firebase |
 | Coastal Hardware (old checkout) | retired |
+
 ## Pick the mode from the repo
 
 | Signal | Mode |
