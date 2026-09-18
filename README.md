@@ -1,10 +1,8 @@
 # Agent skills
 
-Recipes that teach Cursor (and other coding agents) how work should get done.
+Recipes for Cursor and other coding agents. Talk in plain English; the agent picks a matching skill.
 
-You talk in plain English. The agent picks a matching skill and follows the steps.
-
-Skills are written so **other people can use them**. A few files still include the author’s example paths or project names — swap those for yours (or ignore them). His live `AGENTS.md` / `CONTEXT.md` keep his personal defaults without locking the recipes to one person.
+A few files still include example paths — swap those for yours. Keep personal defaults in your own `~/.agents/AGENTS.md`.
 
 ---
 
