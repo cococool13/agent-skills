@@ -13,9 +13,8 @@ they win on commands, project name, and secrets.
 
 | Site | Host |
 | --- | --- |
-| Spiral Collection, spiral-brief, Coastal PharmaCare | Pages |
-| Coastal Hardware, entr-website, JCC Retirement Plan Evaluator, jcc-client-forms, Prize Picks Board (PropScanner) | Workers |
-| JCC SECURE | Firebase |
+| Spiral Collection, spiral-brief, Coastal PharmaCare, Pulse, Portfolio | Pages |
+| Coastal Hardware, ENTR, JCC forms/evaluator/SECURE/calculators, PropScanner | Workers |
 | Coastal Hardware (old checkout) | retired |
 
 ## Pick the mode from the repo
