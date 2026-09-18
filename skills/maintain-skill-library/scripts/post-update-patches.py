@@ -27,43 +27,22 @@ def log(msg: str) -> None:
     print(msg)
 
 
-def materialize_ego_browser() -> None:
-    """Keep ~/.agents/skills/ego-browser as a real directory, never the app bundle."""
-    dest = AGENTS / "ego-browser"
-    if not dest.exists() and not dest.is_symlink():
-        return
-    if dest.is_symlink():
-        resolved = dest.resolve()
-        tmp = AGENTS / ".ego-browser-real"
-        if tmp.exists():
-            shutil.rmtree(tmp)
-        shutil.copytree(resolved, tmp, symlinks=False)
-        dest.unlink()
-        tmp.rename(dest)
-        log(f"materialized ego-browser off {resolved}")
-
-
 def prune_grok_skill_duplicates() -> None:
-    """Grok already scans ~/.agents/skills via [skills].paths. Do not keep copies here."""
-    GROK_SKILLS.mkdir(parents=True, exist_ok=True)
-    readme = GROK_SKILLS / "README.md"
-    if not readme.exists():
-        readme.write_text(
-            "# Grok user skills\n\n"
-            "Do not put skill copies here.\n\n"
-            "Grok loads `~/.agents/skills` via `[skills].paths` in `~/.grok/config.toml`.\n"
-        )
-    count = 0
-    for p in list(GROK_SKILLS.iterdir()):
-        if p.name in {"README.md", ".DS_Store"}:
+    """Report canonical aliases; preserve app-owned links and require retirement approval."""
+    if not GROK_SKILLS.is_dir():
+        return
+    canonical = AGENTS.resolve()
+    for path in sorted(GROK_SKILLS.iterdir()):
+        if not path.is_symlink():
             continue
-        if p.is_symlink():
-            p.unlink()
-            count += 1
-        elif p.is_dir() and (p / "SKILL.md").exists():
-            log(f"left real dir in ~/.grok/skills: {p.name}")
-    if count:
-        log(f"removed {count} duplicate ~/.grok/skills symlink(s)")
+        try:
+            target = path.resolve()
+        except (OSError, RuntimeError):
+            log(f"skill link needs review: {path.name}")
+            continue
+        if target.is_relative_to(canonical):
+            log(f"duplicate skill alias retained for review: {path.name}")
+        # Links outside the canonical tree may be app-owned, not duplicate copies.
 
 
 def install_ego_browser_wrapper() -> None:
@@ -94,7 +73,7 @@ def _replace_description(skill: Path, desc: str) -> bool:
     safe = desc.replace("\\", "\\\\").replace('"', '\\"')
     new_fm, n = re.subn(
         r"(?ms)^description:.*?(?=^[A-Za-z0-9_-]+:|\Z)",
-        f'description: "{safe}"\n',
+        lambda _: f'description: "{safe}"\n',
         fm,
         count=1,
     )

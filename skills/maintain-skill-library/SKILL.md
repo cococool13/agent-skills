@@ -21,7 +21,7 @@ Adapt paths and schedule names to your machine. The table below is how the autho
 
 Weekly: LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
 from `~/Projects/Agent Skills/skills/maintain-skill-library/`:
-update → local overlays → conflict-checked instruction edits → prune scan-path duplicates.
+update → local overlays → conflict-checked instruction edits → report scan-path duplicates.
 The source checkout and `~/.agents/skill-overlays/instruction-edits.json` preserve
 local repairs across upstream updates. An override conflict fails the update and
 requires review instead of replacing changed upstream text blindly.
@@ -37,14 +37,14 @@ Use `~/.agents/.skill-lock.json` to distinguish source-managed installs from
 original personal skills. Do not recreate `~/.claude`.
 
 `~/.agents/skills` is the canonical store for shared personal and source-managed
-skills. Cursor discovers that folder natively. Do not also install the same
-`SKILL.md` into `~/.cursor/skills` or `~/.codex/skills`. Cursor built-ins
+skills. Cursor discovers that folder natively. Do not install duplicate real copies into client skill folders. Cursor sync
+symlinks into the canonical library are intentional aliases, not second copies. Cursor built-ins
 (`~/.cursor/skills-cursor`) and live plugin caches stay untouched.
 
 After `npx skills update`, run
-`scripts/prune-cursor-scan-paths.py` so the CLI cannot re-spread copies into
-the extra scan paths. Weekly LaunchAgent `com.cococool.skills-update` runs
-`scripts/update-skills.sh` (update then prune). Original personal skills have
+`scripts/prune-cursor-scan-paths.py` to report extra scan-path copies. Its default
+is read-only; apply retirements only with explicit authorization. Preserve app-owned links. Weekly LaunchAgent `com.cococool.skills-update` runs
+`scripts/update-skills.sh` (update then scan). Original personal skills have
 no upstream and do not auto-update.
 
 Classify each package as original personal, source-managed install, Codex

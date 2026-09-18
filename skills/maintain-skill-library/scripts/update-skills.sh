@@ -1,5 +1,5 @@
 #!/bin/bash
-# Update source-managed skills, then strip Cursor scan-path copies.
+# Update source-managed skills, restore overlays, then report duplicate aliases.
 set -euo pipefail
 
 # Prefer a concrete nvm node; fall back to newest installed, then PATH.

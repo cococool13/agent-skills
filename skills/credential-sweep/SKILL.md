@@ -30,19 +30,25 @@ Slack tokens (`xox[baprs]-`), private-key headers
 (`-----BEGIN .* PRIVATE KEY-----`), JWTs, and Supabase/Firebase URLs with keys.
 
 ## Handling procedure
-1. **Quarantine, don't classify.** Move every detected secret file into a single
+Read-only audits report locations for review; they do not move files. Respect the
+global ban on opening secret or environment files. Use filename evidence or an
+authorized scanner that reports only filenames and rule identifiers. Do not copy
+secret values into backups, reports, or quarantine notes.
+
+1. **Quarantine only within an authorized organization task.** Move confirmed
+   credential exports only when that move is authorized, into a single
    `_secrets-review/` folder at the root of the area being organized. Do NOT
    place it in School/Personal/Career/Media or any topical bucket.
 2. **Never delete** unless the user explicitly says so per-file (they have before:
    "delete the apple passwords and bitwarden csv, keep the github codes"). Honor
-   that exact granularity. Default action is quarantine + report, not removal.
+   that exact granularity. Default action for a scan is report only; an authorized organization task may quarantine exports.
 3. **Never print secret values** in chat, logs, or the changelog. Reference files
    by name and the *type* of secret only (e.g. "Bitwarden export — 1 file").
 4. **Dotfile tokens are live exposures — escalate.** If a token/PAT/key is found
    in `.zshrc`, `.bashrc`, `.netrc`, shell history, or committed code, flag it
    loudly: state it's exposed, recommend rotating/revoking it at the provider,
-   and offer to remove the line (moving the old value to `_secrets-review/` notes,
-   not echoing it). Remind that rotating locally is not enough — revoke server-side.
+   and identify the affected file without reading or copying the value. Credential
+   changes require explicit authorization; do not move live configuration files. Remind that rotating locally is not enough — revoke server-side.
 
 ## Reporting
 End every run with a short secrets section in the changelog/summary:
@@ -61,8 +67,8 @@ apply regardless of which skill is driving — including when the user asks abou
 Drive, Notes, or Mail with no organizing skill in play. **Never fall back to
 extension-based sorting for a suspected secret.**
 
-If invoked on its own ("scan for exposed secrets"), sweep Downloads, home, the active
-project, and dotfiles, then report.
+For a standalone scan, use the area Cohen named or the active project. Do not
+expand a project scan into Downloads, home, or dotfiles without an explicit request.
 
 ## Guardrails (per global agent rules)
 - Never permanently delete — quarantine to `_secrets-review/` (or `_trash/` if
