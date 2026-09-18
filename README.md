@@ -18,7 +18,9 @@ npx skills add cococool13/agent-skills --all -g -y
 ```
 
 3. Open a project in Cursor and try one of the prompts below.
-4. Optional: copy [`AGENTS.md`](AGENTS.md) into your setup and change names/paths to match you.
+
+Keep always-on rules in **your** `~/.agents/AGENTS.md`. This repo’s `AGENTS.md`
+is a pointer only — do not copy global rules into it.
 
 Update later: `npx skills update -g -y`
 
@@ -59,8 +61,7 @@ You usually don’t type the skill name. Just describe the job.
 - [`deploy-cloudflare`](skills/deploy-cloudflare/SKILL.md) — Deploy to Cloudflare Pages or Workers
 - [`gitleaks-preflight`](skills/gitleaks-preflight/SKILL.md) — Unblock commits when secret scanners fail
 - [`credential-sweep`](skills/credential-sweep/SKILL.md) — Find exposed secrets in local files
-- [`test-coverage`](skills/test-coverage/SKILL.md) — Design tests or improve coverage
-- [`javascript-test-coverage`](skills/javascript-test-coverage/SKILL.md) — JS/TS tests and coverage
+- [`test-coverage`](skills/test-coverage/SKILL.md) — Design tests or improve coverage (Python and JS/TS)
 - [`prompt-audit`](skills/prompt-audit/SKILL.md) — Clean up dated agent prompts and rules
 - [`optimize`](skills/optimize/SKILL.md) — Make code faster, simpler, or cheaper to run
 
@@ -80,5 +81,5 @@ Click any name for the full recipe.
 
 ## Also useful
 
-- **Always-on rules template:** [`AGENTS.md`](AGENTS.md)
+- **Personal always-on rules:** `~/.agents/AGENTS.md` (not this repo)
 - **Extra skills from other people:** [Emil](https://github.com/emilkowalski/skills) · [Matt Pocock](https://github.com/mattpocock/skills) · [Vercel labs](https://github.com/vercel-labs/agent-skills) · [Impeccable](https://github.com/pbakaus/impeccable)

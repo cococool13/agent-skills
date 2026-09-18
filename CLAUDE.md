@@ -8,6 +8,7 @@ Personal agent skills library. Installed to `~/.agents/skills` via the skills CL
 npx skills add cococool13/agent-skills --all -g -y
 python3 skills/maintain-skill-library/scripts/post-update-patches.py
 python3 -m unittest discover -s skills/ship/scripts -p 'test_*.py'
+python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_*.py'
 ```
 
 ## Structure
