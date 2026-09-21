@@ -16,7 +16,7 @@ Kill generic AI tells: uniform card grids, emoji bullets, letter-spaced ALL-CAPS
 
 ## 2. Production hardening
 
-- Remove dead files and legacy visual artifacts; keep the bundle light. Upgrade dependencies only when the brief or project `CLAUDE.md` asks.
+- Remove dead files and legacy visual artifacts; keep the bundle light. Upgrade dependencies only when the brief or project `AGENTS.md` asks.
 - Perf/a11y: image sizes/lazy/modern formats, no layout shift, contrast, alt, keyboard, focus.
 - Responsive verification at 380 / 768 / 1280 via `ego-browser`.
 - SEO/meta: title, description, OG, favicon, sitemap.
@@ -28,4 +28,4 @@ Replace placeholders with real client details when given. Surgical edits only.
 
 ## 4. Handoff
 
-Preserve originals (`_archive/`) before replacing deliverables. Commit when there is a repo. Write `CHANGES.md`. Websites: project `CLAUDE.md` then `deploy-cloudflare`. Optional Grok `/review` before final deploy if there is a PR surface. End with what the user must still do (domain, env, print specs, missing content).
+Preserve originals (`_archive/`) before replacing deliverables. Commit when there is a repo. Write `CHANGES.md`. Websites: project `AGENTS.md` then `deploy-cloudflare`. Optional Grok `/review` before final deploy if there is a PR surface. End with what the user must still do (domain, env, print specs, missing content).

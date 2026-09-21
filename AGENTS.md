@@ -1,9 +1,21 @@
-# Agent Skills repository
+# agent-skills
 
-Read `~/.agents/AGENTS.md` for Cohen's current shared rules and priorities.
-Read this repository's `CLAUDE.md` for its structure and commands.
+Personal agent skills library. Installed to `~/.agents/skills` via the skills CLI.
 
-Keep repository-specific instructions here; do not copy the global rules into
-this file. Source edits belong in `skills/`; follow `maintain-skill-library` to
-preserve local adaptations and verify the installed copies. This repository is
-not a deployment target. Publishing changes requires explicit authorization.
+## Commands
+
+```bash
+npx skills add cococool13/agent-skills --all -g -y
+python3 skills/maintain-skill-library/scripts/post-update-patches.py
+python3 -m unittest discover -s skills/ship/scripts -p 'test_*.py'
+python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_*.py'
+```
+
+## Structure
+
+- `skills/<name>/SKILL.md` — one folder per skill
+- Push to `main`, then run update (or wait for Sunday LaunchAgent `com.cococool.skills-update`)
+
+Not a deploy target. No wrangler.
+
+Read `~/.agents/AGENTS.md` for shared rules. Source edits belong in `skills/`; follow `maintain-skill-library` to preserve local adaptations. Publishing changes requires explicit authorization.

@@ -6,7 +6,7 @@ Run from the active checkout. No-argument execution and `--plan-only` perform lo
 
 `--skip-fetch` is accepted only for plan compatibility. `--fast` is retained for existing callers; every plan now examines only the current branch.
 
-Exit codes: `0` planned Git work completed; `1` blocked or failed; `2` pending work, deployment hint or local-only repository. Exit `0` does not verify deployment. A deploy hint comes from host files and `CLAUDE.md`; consult project instructions for the actual target and CI behavior.
+Exit codes: `0` planned Git work completed; `1` blocked or failed; `2` pending work, deployment hint or local-only repository. Exit `0` does not verify deployment. A deploy hint comes from host files and `AGENTS.md`; consult project instructions for the actual target and CI behavior.
 
 ## File selection
 

@@ -30,7 +30,7 @@ After install, put **your** machine/hosting notes in `~/.agents/CONTEXT.md`. The
 | Pre-ship de-AI / production pass | `de-ai-production-pass` |
 | Tests / coverage (Py/JS/TS) | `test-coverage` |
 | Prose AI-tell cleanup | `unslop` (user-invoked) |
-| Deploy | project `CLAUDE.md` → `deploy-cloudflare` |
+| Deploy | project `AGENTS.md` → `deploy-cloudflare` |
 | `/ship` | `ship` — commit, push, deploy current repo only |
 | React/Next performance | `vercel-react-best-practices` (authorship, not hosting) |
 | Local files | `organize-mac-files` |

@@ -14,13 +14,13 @@ Ship sellable, hand-crafted client sites. Never look AI-generated. Prefer polish
 - App-like: Next.js App Router + React + strict TS + Tailwind + shadcn/ui when the project already uses them
 - Motion: GSAP (+ ScrollTrigger), Lenis, Three.js / WebGL when needed — one Lenis instance, one `gsap.ticker` (never a second rAF loop)
 - Backend: Supabase + Drizzle when the project needs it
-- Versions: read `package.json`. Host: project `CLAUDE.md` → `deploy-cloudflare`. Live map: `~/.agents/CONTEXT.md`
+- Versions: read `package.json`. Host: project `AGENTS.md` → `deploy-cloudflare`. Live map: `~/.agents/CONTEXT.md`
 
 A leftover `netlify.toml` or `vercel.json` is not the live host.
 
 ## Spec discipline
 
-1. Read project brief files that exist (`AGENTS.md` / `CLAUDE.md`, `BRAND.md`, `SPEC.md` / `BUILD_PROMPT.md`, `DESIGN.md`, `STRUCTURE.md`, `MOTION.md`, logos) before writing.
+1. Read project brief files that exist (`AGENTS.md`, `BRAND.md`, `SPEC.md` / `BUILD_PROMPT.md`, `DESIGN.md`, `STRUCTURE.md`, `MOTION.md`, logos) before writing.
 2. Treat brief non-negotiables, motion law, and CSS token names as binding.
 3. Keep editable copy in one content source.
 

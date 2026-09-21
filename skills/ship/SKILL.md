@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Commit, push, and deploy the current project when the user invokes /ship."
+description: "Use when Cohen runs /ship or asks to commit, push, and deploy the current repo only."
 disable-model-invocation: true
 ---
 
@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 An invocation of `/ship` authorizes commit, push, and deployment for the active project, subject to project instructions and any narrower request. A request to edit or audit this skill does not authorize shipping.
 
-Work in the current Git checkout only. Read its applicable `AGENTS.md` and `CLAUDE.md` before changes. If cwd is not a repository, stop and identify the missing project.
+Work in the current Git checkout only. Read its applicable `AGENTS.md` before changes. If cwd is not a repository, stop and identify the missing project.
 
 ## Prepare
 

@@ -2,7 +2,7 @@
 
 ## Start with the project truth
 
-1. Read the nearest `AGENTS.md` or `CLAUDE.md`, then inspect `package.json`, the lockfile, and the existing test/coverage configuration.
+1. Read the nearest `AGENTS.md`, then inspect `package.json`, the lockfile, and the existing test/coverage configuration.
 2. Select the package manager from the lockfile. Do not mix package managers, install dependencies, add coverage providers, or rewrite test configuration unless the user explicitly asks.
 3. State the success check before modifying code. For a reproducible failure, run the smallest reproduction before and after the change.
 

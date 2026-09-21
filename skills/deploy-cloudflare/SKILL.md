@@ -1,12 +1,12 @@
 ---
 name: deploy-cloudflare
-description: "Use when deploying sites to Cloudflare Pages or Workers."
+description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers."
 
 ---
 
 # Deploy to Cloudflare
 
-Default hosting for this pack is Cloudflare. Read the project's `CLAUDE.md` / `AGENTS.md` first —
+Default hosting for this pack is Cloudflare. Read the project's `AGENTS.md` first —
 they win on commands, project name, and secrets.
 
 ## Example host map (author's projects — replace with yours)
@@ -45,7 +45,7 @@ npx wrangler pages deploy <outdir> --project-name=<name> --branch=main
 ```
 
 Typical names: `spiraldemo`, `coastal-pharmacare`, `spiral-collection`. Output
-dirs are usually `dist` or `out` — read `CLAUDE.md` / `wrangler.jsonc`.
+dirs are usually `dist` or `out` — read `AGENTS.md` / `wrangler.jsonc`.
 
 ## Workers static assets (Coastal Hardware, entr-website)
 
