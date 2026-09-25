@@ -79,7 +79,8 @@ def _replace_description(skill: Path, desc: str) -> bool:
     )
     if not n:
         return False
-    skill.write_text("---" + new_fm + body)
+    # fm stops before "\n---"; drop the newline the replacement adds so no blank line appears.
+    skill.write_text("---" + new_fm.rstrip("\n") + body)
     return True
 
 
