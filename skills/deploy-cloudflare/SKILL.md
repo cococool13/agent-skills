@@ -13,9 +13,8 @@ they win on commands, project name, and secrets.
 
 | Site | Host |
 | --- | --- |
-| Spiral Collection, spiral-brief, Coastal PharmaCare, Pulse, Portfolio | Pages |
-| Coastal Hardware, ENTR, JCC forms/evaluator/SECURE/calculators, PropScanner | Workers |
-| Coastal Hardware (old checkout) | retired |
+| Spiral Collection, spiral-brief, Pulse, Portfolio | Pages |
+| ENTR, JCC forms/evaluator/SECURE/calculators, PropScanner | Workers |
 
 ## Pick the mode from the repo
 
@@ -25,8 +24,6 @@ they win on commands, project name, and secrets.
 | `wrangler.jsonc` with `assets.directory` or Worker `main` | **Workers** (static assets or OpenNext/Express) |
 | GitHub Action running `wrangler pages deploy` | Prefer push to `main` if CI already deploys |
 
-Never assume Vercel. There is no Vercel deploy skill on this stack.
-
 ## Pre-deploy
 
 1. `git status` — commit or stash first.
@@ -35,7 +32,7 @@ Never assume Vercel. There is no Vercel deploy skill on this stack.
    `pnpm build`, etc.).
 4. Confirm Wrangler sees the right account: `npx wrangler whoami`.
 
-## Pages (example: spiral-brief, Coastal PharmaCare, Spiral Collection site)
+## Pages (example: spiral-brief, Spiral Collection site)
 
 Pin `wrangler` in `devDependencies` and use `npm run deploy` locally — avoids a fresh `npx` download every deploy. CI may keep `npx wrangler@4` if you prefer.
 
@@ -44,10 +41,10 @@ npm run build   # or pnpm build — use the project's package manager
 npx wrangler pages deploy <outdir> --project-name=<name> --branch=main
 ```
 
-Typical names: `spiraldemo`, `coastal-pharmacare`, `spiral-collection`. Output
+Typical names: `spiraldemo`, `spiral-collection`. Output
 dirs are usually `dist` or `out` — read `AGENTS.md` / `wrangler.jsonc`.
 
-## Workers static assets (Coastal Hardware, entr-website)
+## Workers static assets (entr-website)
 
 ```bash
 npx wrangler deploy
