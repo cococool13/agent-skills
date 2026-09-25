@@ -36,7 +36,7 @@ def candidates() -> list[Path]:
                 continue
             if not path.exists():
                 found.append(path)
-            elif view != CURSOR and target.is_relative_to(canonical):
+            elif view not in {CURSOR, CLAUDE} and target.is_relative_to(canonical):
                 found.append(path)
     return found
 

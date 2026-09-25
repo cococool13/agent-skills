@@ -19,7 +19,7 @@ Adapt paths and schedule names to your machine. The table below is how the autho
 | Local overlays | `~/.agents/skill-overlays/` | `post-update-patches.py` after every update |
 | In-place only | `qcc1-agentic-trading` stub | manual |
 
-Weekly: LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
+Daily (10:00): LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
 from `~/Projects/Agent Skills/skills/maintain-skill-library/`:
 update → local overlays → conflict-checked instruction edits → report scan-path duplicates.
 The source checkout and `~/.agents/skill-overlays/instruction-edits.json` preserve
@@ -27,23 +27,23 @@ local repairs across upstream updates. An override conflict fails the update and
 requires review instead of replacing changed upstream text blindly.
 
 Edit personal skills in your checkout of this repo (author path: `~/Projects/Agent Skills`), push to GitHub, then run the
-update script (or the author's weekly Sunday job).
+update script (or the author's daily 10:00 job).
 
 ## 1. Establish ownership
 
 Inventory every `SKILL.md` in `~/.agents/skills`, `~/.cursor/skills`,
-`~/.codex/skills`, enabled plugin roots, and any project-local skill roots.
+`~/.codex/skills`, `~/.claude/skills`, enabled plugin roots, and any project-local skill roots.
 Use `~/.agents/.skill-lock.json` to distinguish source-managed installs from
-original personal skills. Do not recreate `~/.claude`.
+original personal skills. `~/.claude/skills` is a symlink view of this library, refreshed by `sync-claude-skills.py`.
 
 `~/.agents/skills` is the canonical store for shared personal and source-managed
 skills. Cursor discovers that folder natively. Do not install duplicate real copies into client skill folders. Cursor sync
-symlinks into the canonical library are intentional aliases, not second copies. Cursor built-ins
+symlinks into the canonical library are intentional aliases, not second copies. Claude Code uses the same kind of alias under `~/.claude/skills`. Cursor built-ins
 (`~/.cursor/skills-cursor`) and live plugin caches stay untouched.
 
 After `npx skills update`, run
 `scripts/prune-cursor-scan-paths.py` to report extra scan-path copies. Its default
-is read-only; apply retirements only with explicit authorization. Preserve app-owned links. Weekly LaunchAgent `com.cococool.skills-update` runs
+is read-only; apply retirements only with explicit authorization. Preserve app-owned links. Daily LaunchAgent `com.cococool.skills-update` runs
 `scripts/update-skills.sh` (update then scan). Original personal skills have
 no upstream and do not auto-update.
 

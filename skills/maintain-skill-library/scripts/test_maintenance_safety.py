@@ -81,6 +81,7 @@ class RetirementTests(unittest.TestCase):
 
     def test_preserves_cursor_sync_system_app_and_real_directories(self):
         (self.prune.CURSOR / 'example').symlink_to(self.skill)
+        (self.prune.CLAUDE / 'example').symlink_to(self.skill)
         (self.prune.CODEX / '.system').mkdir()
         app = self.root / 'app'; app.mkdir()
         (self.prune.CODEX / 'app-owned').symlink_to(app)
