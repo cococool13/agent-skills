@@ -85,7 +85,7 @@ ratio, caption/alt text, and a short art-direction note. Build simple diagrams, 
 code windows, or geometric primitives only when they match the source style.
 
 For substantial visual exploration, generated mockups, bitmap assets, or post-build visual
-QA, follow [references/visual-workflow.md](references/visual-workflow.md).
+QA, follow [references/visual-workflow.md](visual-workflow.md).
 
 ### 2. Research Screens For Product Details
 

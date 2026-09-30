@@ -21,4 +21,4 @@ Before final delivery, confirm:
 If the answer is no, research or refine more before delivering.
 
 For substantial visual work, run the visual QA pass in
-[references/visual-workflow.md](references/visual-workflow.md) before handoff.
+[references/visual-workflow.md](visual-workflow.md) before handoff.

@@ -3,13 +3,13 @@
 After research, execute like a senior product designer. Use the bundled references only
 when relevant; do not load every file by default.
 
-- Typography: [references/typography.md](references/typography.md)
-- Color: [references/color.md](references/color.md)
-- Motion: [references/motion.md](references/motion.md)
-- Icons: [references/icons.md](references/icons.md)
-- Forms, focus, images, touch, performance, accessibility: [references/craft-details.md](references/craft-details.md)
-- Copywriting and persuasion: [references/copywriting.md](references/copywriting.md)
-- Anti-AI-slop checks: [references/anti-ai-slop.md](references/anti-ai-slop.md)
+- Typography: [references/typography.md](typography.md)
+- Color: [references/color.md](color.md)
+- Motion: [references/motion.md](motion.md)
+- Icons: [references/icons.md](icons.md)
+- Forms, focus, images, touch, performance, accessibility: [references/craft-details.md](craft-details.md)
+- Copywriting and persuasion: [references/copywriting.md](copywriting.md)
+- Anti-AI-slop checks: [references/anti-ai-slop.md](anti-ai-slop.md)
 
 Core craft rules:
 

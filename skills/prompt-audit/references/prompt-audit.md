@@ -1,5 +1,10 @@
 # Prompt Audit - Finding and Removing Dated Prompting Patterns
 
+> Local packaging note: `shared/model-migration.md` and `shared/prompt-caching.md`
+> are not bundled here. Treat references to them as upstream context. For a
+> model or API change, check current official documentation for the actual target
+> provider before proposing edits; do not infer behavior from this guide’s model claims.
+
 > **If you arrived via `/claude-api prompt-audit`:** this is the right file. Execute the steps below in order - do not summarize them back to the user. Start with Step 0 (establish scope and target model), and finish by producing both deliverables: the audit report (Step 5) and the proposed diff (Step 6).
 
 Prompts, skills, and tool descriptions accumulate instructions tuned to older models: emphasis added because an old model under-triggered, step-by-step scripts added because an old model planned poorly, format scaffolds written before the API had structured outputs. Current Claude models follow instructions more closely and more literally than the models much of this text was written for, so the leftover text is not just wasted tokens - specific outdated instructions actively degrade behavior (over-triggering, over-planning, rigid responses in gray areas), while merely irrelevant text is comparatively harmless. The audit's job is therefore to find **specific dated instructions**, not to make prompts shorter. "Every token earns its place" is the frame; "make it short" is not.

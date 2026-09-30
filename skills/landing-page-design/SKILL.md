@@ -9,13 +9,13 @@ A landing page is not a homepage. A homepage serves multiple intents. A landing 
 
 **one offer → one audience → one primary action.**
 
-This skill has two halves. **Part A** decides what the page says and how it is structured. **Part B** is the non negotiable visual system. Work through A before touching B.
+This skill has two halves. **Part A** decides what the page says and how it is structured. **Part B** applies the project’s visual system and verification requirements. Work through A before touching B.
 
 ## Scope
 
 Landing pages, marketing sites, and conversion-focused web sections only. Product UI, dashboards, and general components belong to `impeccable` / `premium-web-build` / project design rules. When the user's explicit prompt conflicts with a rule here, the user wins.
 
-**Existing sites.** Prefer `de-ai-production-pass` or `impeccable` for upgrading an existing site rather than applying this skill as a full redesign.
+**Existing sites.** Preserve the accepted composition and make the requested changes. Use `impeccable` for focused craft work; use `de-ai-production-pass` only when Cohen requests that pass.
 
 
 **Part B (visual system):** load `references/visual-system.md` only after Part A strategy is set.
@@ -26,7 +26,7 @@ Landing pages, marketing sites, and conversion-focused web sections only. Produc
 
 ## A1. Intake
 
-Gather these before designing or writing. Ask only for what is missing, and ask in one batch rather than one question at a time.
+Infer these from the brief and project docs first. Ask only when missing information changes correctness, scope, or a material product decision; continue independent work while waiting.
 
 **Purpose**
 - What is the ONE primary action? (trial, demo, buy, waitlist, download)
@@ -54,11 +54,13 @@ If the user cannot answer, make a reasonable assumption, state it in one line, a
 
 ## A2. Page structure
 
-**Above the fold (required)**
+Use the sections the offer needs. Preserve an existing approved structure; a small page may need only the hero and essential details.
+
+**Above the fold**
 1. Headline, outcome plus audience
 2. Subheadline, clarifies how and adds specificity
 3. Primary CTA, clear verb plus what they get
-4. One proof signal, logo strip, stat, or short testimonial
+4. Verified proof, when available; omit unsupported trust signals
 5. Hero visual, product screenshot or video, or a strong illustration
 
 **Mid page (the argument)**
@@ -68,7 +70,7 @@ If the user cannot answer, make a reasonable assumption, state it in one line, a
 9. Social proof, testimonials or a case study
 
 **Bottom (objection handling)**
-10. FAQ, six to twelve questions
+10. FAQ covering real objections, when useful
 11. Risk reversal, trial, cancel anytime, guarantee
 12. Final CTA, identical to the top
 
@@ -95,9 +97,9 @@ Pick one and say why.
 
 **Be specific.**
 - ❌ "Save time and streamline"
-- ✅ "Cut your weekly reporting from 4 hours to 15 minutes"
+- ✅ "Cut your weekly reporting from 4 hours to 15 minutes" — only with evidence for that measured claim
 
-**Reduce risk.** Pick at least one: free trial, free plan, no credit card, cancel anytime, money back guarantee.
+**Reduce uncertainty.** Explain actual price, access, cancellation, and support terms. Mention trials or guarantees only when the product offers them; do not invent an offer.
 
 **Treat objections as a section, not a footnote.** Move the FAQ earlier for high friction offers. Put proof directly beside the claim it supports.
 
@@ -114,11 +116,11 @@ Pick one and say why.
 
 **Benefit bullets.** Bold benefit, then the proof or detail. Example: **Faster iteration** — generate three layout variants in one click.
 
-Note: the copy rules in B1 still apply. No hyphens inside sentences, no orphaned words.
+Follow B1 and the project’s approved voice. Check line breaks in the rendered layout.
 
 ## A6. Build order
 
-Work section by section, in this order:
+Work on the agreed sections in dependency order. A typical new page is:
 
 1. Hero
 2. Benefits

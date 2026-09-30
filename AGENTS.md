@@ -14,7 +14,7 @@ python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_*
 ## Structure
 
 - `skills/<name>/SKILL.md` — one folder per skill
-- Push to `main`, then run update (or wait for Sunday LaunchAgent `com.cococool.skills-update`)
+- Edit `skills/` in this checkout. After authorized publication, run the update workflow in `skills/maintain-skill-library/SKILL.md`; the local LaunchAgent runs daily at 10:00.
 
 Not a deploy target. No wrangler.
 
