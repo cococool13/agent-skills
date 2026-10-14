@@ -1,7 +1,6 @@
 ---
 name: deploy-cloudflare
 description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers."
-
 ---
 
 # Deploy to Cloudflare
@@ -73,12 +72,10 @@ Name vars only; do not print values.
 
 ## Verify
 
-Open the workers.dev / pages.dev URL from deploy output. Use the `ego-browser`
-skill (Ego Lite / `ego-browser` CLI). **Before screenshots**, unminimize the agent
-window — paste `ensureAgentWindow` from `~/.agents/skill-overlays/ego-browser/references/agents.md`
-(or run `bash ~/.agents/skill-overlays/ego-browser/scripts/health-check.sh`).
-`captureScreenshot()` returns a **file path**, not bytes. Confirm the change on a
-real page, not just HTTP 200. Do not use Cursor browser MCP as a substitute.
+Open the workers.dev / pages.dev URL from the deploy output in `ego-browser`.
+Use Claude in Chrome when the check needs Cohen's logged-in Cloudflare session.
+Confirm the change on the real page, not just HTTP 200. If no browser connects,
+say the browser check did not run.
 
 ## Common failures
 

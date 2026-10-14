@@ -1,7 +1,6 @@
 ---
 name: gitleaks-preflight
 description: "Use before commit, push, or deploy when gitleaks or secret scans block work."
-
 ---
 
 # Gitleaks preflight

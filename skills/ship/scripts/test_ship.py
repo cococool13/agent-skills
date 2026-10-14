@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -61,15 +62,23 @@ class GitFixture(unittest.TestCase):
         self.assertEqual(payload['pending'][0], {'op': 'commit', 'files': ['a.txt']})
 
     def test_buckets(self):
-        for name in ['.env.local', 'keys/id_rsa', '.dev.vars', 'debug.log', '_archive/old.txt', 'app.ts', '.env.example']:
+        names = [
+            '.env.local', '.env.production', '.envrc', 'keys/id_rsa', '.dev.vars', 'debug.log',
+            '_archive/old.txt', 'app.ts', '.env.example', '.env.sample', 'app/.env.local.example',
+            'app/.env.production.local.example',
+            'node_modules/pkg/index.js', '.next/cache/x',
+        ]
+        for name in names:
             (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
             (self.repo / name).write_text('x')
         (self.repo / 'big.bin').write_bytes(b'x' * (ship.MAX_UNTRACKED + 1))
         buckets = ship.inspect(self.repo)['buckets']
-        self.assertEqual(sorted(buckets['secret']), ['.dev.vars', '.env.example', '.env.local', 'keys/id_rsa'])
-        self.assertEqual(sorted(buckets['noise']), ['big.bin', 'debug.log'])
+        self.assertEqual(sorted(buckets['secret']), ['.dev.vars', '.env.local', '.env.production', '.envrc', 'keys/id_rsa'])
+        self.assertEqual(sorted(buckets['noise']), ['.next/cache/x', 'big.bin', 'debug.log', 'node_modules/pkg/index.js'])
         self.assertEqual(buckets['archive'], ['_archive/old.txt'])
-        self.assertEqual(buckets['commit'], ['app.ts'])
+        self.assertEqual(sorted(buckets['commit']), [
+            '.env.example', '.env.sample', 'app.ts', 'app/.env.local.example', 'app/.env.production.local.example',
+        ])
 
     def test_unusual_names_and_rename_commit(self):
         remote = self.remote()
@@ -168,6 +177,171 @@ class GitFixture(unittest.TestCase):
     def test_not_a_repo(self):
         payload = ship.ship(None, False, [], [])
         self.assertEqual(payload['blockers'], ['not in a Git repository'])
+
+    def test_example_env_commits_and_real_env_stays_out(self):
+        self.remote()
+        (self.repo / '.env.example').write_text('TOKEN=\n')
+        (self.repo / '.env').write_text('TOKEN=real\n')
+        code, payload, _ = self.main('--apply', '-m', 'chore: example env')
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(self.git('show', '--name-only', '--format=', 'HEAD'), '.env.example')
+        self.assertIn('.env', self.git('status', '--porcelain'))
+
+    def test_plan_lists_unpushed_commits(self):
+        self.remote()
+        self.git('commit', '--allow-empty', '-m', 'feat: local only')
+        code, payload, _ = self.main()
+        self.assertEqual(code, 2, payload)
+        sha = self.git('rev-parse', '--short', 'HEAD')
+        self.assertEqual(payload['repo']['unpushed'], [f'{sha} feat: local only'])
+        self.assertEqual(payload['repo']['ahead'], 1)
+
+    def test_missing_upstream_warns(self):
+        remote = self.root / 'remote.git'
+        subprocess.run(['git', 'init', '--bare', '-b', 'main', str(remote)], check=True, capture_output=True)
+        self.git('remote', 'add', 'origin', str(remote))
+        code, payload, _ = self.main()
+        self.assertEqual(code, 2, payload)
+        self.assertIn('no upstream; push publishes this branch', payload['warnings'])
+        self.assertEqual(payload['repo']['unpushed'], [])
+
+    def test_oversize_file_blocks_before_commit(self):
+        (self.repo / 'huge.bin').write_bytes(b'x' * 20)
+        with patch.object(ship, 'BLOCK_BYTES', 10), patch.object(ship, 'WARN_BYTES', 5):
+            code, payload, scanner = self.main('--apply', '-m', 'x')
+        self.assertEqual(code, 1)
+        self.assertTrue(any('GitHub rejects' in item for item in payload['blockers']))
+        scanner.assert_not_called()
+        self.assertEqual(self.git('rev-list', '--count', 'HEAD'), '1')
+
+    def test_size_warning_still_commits(self):
+        (self.repo / 'wide.bin').write_bytes(b'x' * 8)
+        with patch.object(ship, 'BLOCK_BYTES', 10), patch.object(ship, 'WARN_BYTES', 5):
+            code, payload, _ = self.main('--apply', '-m', 'chore: wide file')
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(any('GitHub warns' in item for item in payload['warnings']))
+        self.assertEqual(self.git('show', '--name-only', '--format=', 'HEAD'), 'wide.bin')
+
+    def test_lfs_attribute_without_clean_filter_blocks_raw_file(self):
+        (self.repo / '.gitattributes').write_text('*.mp4 filter=lfs\n')
+        (self.repo / 'film.mp4').write_bytes(b'x' * 30)
+        original = ship.out
+
+        def no_clean_filter(repo, *args):
+            if args == ('config', '--get', 'filter.lfs.clean'):
+                return ''
+            return original(repo, *args)
+
+        with patch.object(ship, 'out', side_effect=no_clean_filter), \
+             patch.object(ship, 'BLOCK_BYTES', 20), patch.object(ship, 'WARN_BYTES', 18):
+            code, payload, scanner = self.main('--apply', '-m', 'x')
+        self.assertEqual(code, 1)
+        self.assertTrue(any('film.mp4' in item and 'GitHub rejects' in item for item in payload['blockers']))
+        scanner.assert_not_called()
+
+    def test_lfs_pointer_text_skips_size_without_clean_filter(self):
+        (self.repo / '.gitattributes').write_text('*.mp4 filter=lfs\n')
+        (self.repo / 'film.mp4').write_bytes(ship.LFS_POINTER + b'\nsize 99\n' + b'x' * 20)
+        original = ship.out
+
+        def no_clean_filter(repo, *args):
+            if args == ('config', '--get', 'filter.lfs.clean'):
+                return ''
+            return original(repo, *args)
+
+        with patch.object(ship, 'out', side_effect=no_clean_filter), \
+             patch.object(ship, 'BLOCK_BYTES', 20), patch.object(ship, 'WARN_BYTES', 18):
+            code, payload, _ = self.main()
+        self.assertNotIn('film.mp4', '\n'.join(payload['blockers'] + payload['warnings']))
+        self.assertEqual(code, 2)
+
+    def test_lfs_clean_filter_skips_working_tree_size(self):
+        self.git('config', 'filter.lfs.clean', 'git-lfs clean -- %f')
+        (self.repo / '.gitattributes').write_text('*.mp4 filter=lfs\n')
+        (self.repo / 'film.mp4').write_bytes(b'x' * 30)
+        with patch.object(ship, 'BLOCK_BYTES', 20), patch.object(ship, 'WARN_BYTES', 18):
+            code, payload, _ = self.main()
+        self.assertNotIn('GitHub rejects', '\n'.join(payload['blockers']))
+        self.assertNotIn('GitHub warns', '\n'.join(payload['warnings']))
+        self.assertIn('film.mp4', payload['repo']['buckets']['commit'])
+        self.assertEqual(code, 2)
+
+    def test_plan_keeps_an_old_worktree(self):
+        other = self.root / 'old-tree'
+        self.git('worktree', 'add', '-b', 'old', str(other))
+        code, payload, _ = self.main()
+        self.assertEqual(code, 2, payload)
+        self.assertTrue(other.exists())
+        self.assertEqual(payload['pending'][-1]['op'], 'cleanup')
+
+    def test_apply_removes_an_old_worktree_and_its_merged_branch(self):
+        other = self.root / 'old-tree'
+        self.git('worktree', 'add', '-b', 'old', str(other))
+        code, payload, scanner = self.main('--apply')
+        self.assertEqual(code, 0, payload)
+        scanner.assert_not_called()
+        self.assertFalse(other.exists())
+        removed = {str(Path(path).resolve()) for path in payload['cleanup_result']['removed']}
+        self.assertIn(str(other.resolve()), removed)
+        self.assertEqual(self.git('branch', '--list', 'old'), '')
+
+    def test_dirty_or_unique_worktree_stays(self):
+        dirty = self.root / 'dirty-tree'
+        unique = self.root / 'unique-tree'
+        self.git('worktree', 'add', '-b', 'dirty-branch', str(dirty))
+        self.git('worktree', 'add', '-b', 'unique-branch', str(unique))
+        (dirty / 'a.txt').write_text('local edit\n')
+        subprocess.run(['git', '-C', str(unique), 'commit', '--allow-empty', '-m', 'only here'], check=True)
+        code, payload, _ = self.main('--apply')
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(dirty.exists())
+        self.assertTrue(unique.exists())
+        reasons = {Path(item['path']).name: item['reason'] for item in payload['cleanup']}
+        self.assertEqual(reasons['dirty-tree'], 'dirty')
+        self.assertEqual(reasons['unique-tree'], 'unique-commits')
+
+    def test_main_worktree_stays_when_shipping_from_a_linked_tree(self):
+        linked = self.root / 'linked'
+        self.git('worktree', 'add', '-b', 'feature', str(linked))
+        with patch.object(ship, 'scan', return_value=CLEAN):
+            payload = ship.ship(linked, True, [], [])
+        self.assertFalse(payload['blockers'], payload)
+        self.assertTrue((self.repo / '.git').is_dir())
+        self.assertTrue(linked.exists())
+        self.assertTrue((self.repo / 'a.txt').exists())
+
+    def test_failed_push_does_not_remove_a_worktree(self):
+        remote = self.remote()
+        hook = remote / 'hooks' / 'pre-receive'
+        hook.write_text('#!/bin/sh\nexit 1\n')
+        hook.chmod(0o755)
+        other = self.root / 'old-tree'
+        self.git('worktree', 'add', '-b', 'old', str(other))
+        (self.repo / 'a.txt').write_text('two\n')
+        code, payload, _ = self.main('--apply', '-m', 'x')
+        self.assertEqual(code, 1, payload)
+        self.assertTrue(other.exists())
+        self.assertTrue(any('push failed' in item for item in payload['blockers']))
+
+    def test_missing_worktree_is_pruned(self):
+        other = self.root / 'old-tree'
+        self.git('worktree', 'add', '-b', 'old', str(other))
+        shutil.rmtree(other)
+        code, payload, _ = self.main('--apply')
+        self.assertEqual(code, 0, payload)
+        self.assertNotIn('old-tree', self.git('worktree', 'list'))
+
+    def test_leftover_directory_moves_to_trash(self):
+        leftover = self.repo / '.worktrees' / 'stale'
+        leftover.mkdir(parents=True)
+        (leftover / 'note.txt').write_text('old\n')
+        trash = self.root / 'trash'
+        with patch.object(ship, 'TRASH', trash):
+            code, payload, _ = self.main('--apply')
+        self.assertEqual(code, 0, payload)
+        self.assertFalse(leftover.exists())
+        self.assertFalse((self.repo / '.worktrees').exists())
+        self.assertTrue(any(trash.rglob('note.txt')))
 
 
 class ScanTests(unittest.TestCase):
