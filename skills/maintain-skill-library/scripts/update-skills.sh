@@ -17,6 +17,7 @@ mkdir -p "$(dirname "$LOG")"
   python3 "${MAINTENANCE_DIR}/sync-claude-skills.py"
   python3 "${MAINTENANCE_DIR}/post-update-patches.py"
   python3 "${MAINTENANCE_DIR}/apply-instruction-overrides.py"
+  python3 "${MAINTENANCE_DIR}/audit-context.py"
   python3 "${MAINTENANCE_DIR}/prune-cursor-scan-paths.py"
   if [ "$update_status" -ne 0 ]; then
     echo "skills update failed; local overlays restored"

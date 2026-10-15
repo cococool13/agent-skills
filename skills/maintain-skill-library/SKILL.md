@@ -1,7 +1,6 @@
 ---
 name: maintain-skill-library
 description: "Use when auditing or maintaining the installed skill library."
-
 ---
 
 # Maintain Skill Library
@@ -17,7 +16,7 @@ Adapt paths and schedule names to your machine. The table below is how the autho
 | Personal skills | `cococool13/agent-skills` → `~/.agents/skills` | `npx skills update -g -y` |
 | Upstream skills | emilkowalski, vercel-labs, uizze, citrolabs, etc. | same |
 | Local overlays | `~/.agents/skill-overlays/` | `post-update-patches.py` after every update |
-| In-place only | `qcc1-agentic-trading` stub | manual |
+| Archived | `qcc1-agentic-trading` (2026-10-01) | restore only when requested |
 
 Daily (10:00): LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
 from `~/Projects/Agent Skills/skills/maintain-skill-library/`:
@@ -25,6 +24,9 @@ update → local overlays → conflict-checked instruction edits → report scan
 The source checkout and `~/.agents/skill-overlays/instruction-edits.json` preserve
 local repairs across upstream updates. An override conflict fails the update and
 requires review instead of replacing changed upstream text blindly.
+After each update, the overlay restores this checkout's maintenance instructions
+and Python/shell scripts to the installed shared skill. Unchanged files are skipped;
+app-owned links are preserved. Other skills retain their upstream ownership.
 
 Edit personal skills in your checkout of this repo (author path: `~/Projects/Agent Skills`), push to GitHub, then run the
 update script (or the author's daily 10:00 job).
@@ -39,7 +41,9 @@ original personal skills. `~/.claude/skills` is a symlink view of this library, 
 `~/.agents/skills` is the canonical store for shared personal and source-managed
 skills. Cursor discovers that folder natively. Do not install duplicate real copies into client skill folders. Cursor sync
 symlinks into the canonical library are intentional aliases, not second copies. Claude Code uses the same kind of alias under `~/.claude/skills`. Cursor built-ins
-(`~/.cursor/skills-cursor`) and live plugin caches stay untouched.
+(`~/.cursor/skills-cursor`) and live plugin caches stay untouched. Scheduled sync
+reports real host-specific copies instead of archiving them or exposing them to
+other clients. A deliberately host-aware personal skill may share a built-in name.
 
 After `npx skills update`, run
 `scripts/prune-cursor-scan-paths.py` to report extra scan-path copies. Its default
@@ -47,9 +51,25 @@ is read-only; apply retirements only with explicit authorization. Preserve app-o
 `scripts/update-skills.sh` (update then scan). Original personal skills have
 no upstream and do not auto-update.
 
+The scan includes broken Grok links while preserving working Grok aliases. Shared
+guard source is in `scripts/hooks/`; `~/.cursor/hooks/` links to that source. Run
+`python3 -m unittest discover -s scripts -p 'test_*.py'` from this skill's folder
+after changing maintenance or hook behavior. `scripts/grok-wrapper.sh` loads the
+existing MCP environment before starting Grok; it never prints credential values.
+
 Classify each package as original personal, source-managed install, Codex
 system/curated, plugin-managed, or project-local. This step is complete when every
 live package has one source classification and duplicate names are accounted for.
+
+## Browser workflow maintenance
+
+Ego CLI and runtime skills are app-owned. Preserve their links and use the
+installed TaskSpace/Page API. Local host guidance is maintained in
+`references/ego-browser.md`; the overlay reference links to this source.
+`scripts/ego-health-check.sh` runs the bounded local fixture check without
+restarting the browser or using a public monitoring page. Never reinstall the
+retired wrapper or legacy helper patches. Run the maintenance test suite after
+changing this workflow, and run the live health check when validating Ego.
 
 ## 2. Audit predictability
 
@@ -82,6 +102,14 @@ This step is complete when each edit has a stated behavior change and no managed
 package was unintentionally forked.
 
 ## 4. Verify the live tree
+
+Run `python3 scripts/audit-context.py` for the read-only top-level discovery
+summary and overlay checks. It reports characters, not billed tokens, and
+flags verbose provider descriptions for review without rewriting them. It
+does not inspect credentials, configuration secrets, or session histories.
+Keep model-trigger descriptions concise (normally 140–220 characters), with
+distinct branches; keep complete execution guidance in the skill body or
+references. The scheduled updater runs this check after applying overlays.
 
 Rerun the inventory and structural checks against the installed paths, inspect the
 exact before/after diff, and smoke-test changed routing with representative positive

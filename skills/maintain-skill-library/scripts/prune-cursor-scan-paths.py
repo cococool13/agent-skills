@@ -17,13 +17,14 @@ AGENTS = HOME / '.agents/skills'
 CURSOR = HOME / '.cursor/skills'
 CODEX = HOME / '.codex/skills'
 CLAUDE = HOME / '.claude/skills'
+GROK = HOME / '.grok/skills'
 
 
 def candidates() -> list[Path]:
     """Only broken links or redundant aliases are safe automatic candidates."""
     found = []
     canonical = AGENTS.resolve()
-    for view in (CURSOR, CODEX, CLAUDE):
+    for view in (CURSOR, CODEX, CLAUDE, GROK):
         if not view.is_dir():
             continue
         for path in sorted(view.iterdir()):
@@ -36,7 +37,7 @@ def candidates() -> list[Path]:
                 continue
             if not path.exists():
                 found.append(path)
-            elif view not in {CURSOR, CLAUDE} and target.is_relative_to(canonical):
+            elif view == CODEX and target.is_relative_to(canonical):
                 found.append(path)
     return found
 

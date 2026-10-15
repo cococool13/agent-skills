@@ -36,6 +36,21 @@ class OverlaySafetyTests(unittest.TestCase):
         self.assertTrue(link.is_symlink())
         self.assertEqual(link.resolve(), app.resolve())
 
+    def test_local_maintenance_survives_upstream_and_is_idempotent(self):
+        source = self.root / 'source'
+        (source / 'scripts').mkdir(parents=True)
+        (source / 'SKILL.md').write_text('local guidance\n')
+        (source / 'scripts/repair.py').write_text('local repair\n')
+        self.overlay.MAINTENANCE_SOURCE = source
+        dest = self.overlay.AGENTS / 'maintain-skill-library'
+        dest.mkdir()
+        (dest / 'SKILL.md').write_text('upstream guidance\n')
+        self.overlay.restore_local_maintenance()
+        self.assertEqual((dest / 'SKILL.md').read_text(), 'local guidance\n')
+        self.assertEqual((dest / 'scripts/repair.py').read_text(), 'local repair\n')
+        with patch.object(self.overlay.shutil, 'copy2', side_effect=AssertionError('unnecessary copy')):
+            self.overlay.restore_local_maintenance()
+
     def test_canonical_alias_waits_for_retirement_approval(self):
         skill = self.overlay.AGENTS / 'example'
         skill.mkdir()
@@ -55,6 +70,13 @@ class OverlaySafetyTests(unittest.TestCase):
         self.assertIn('metadata:\n  owner: local\n', skill.read_text())
         self.assertTrue(skill.read_text().endswith('---\nBody\n'))
 
+    def test_repeated_description_overlay_does_not_rewrite_file(self):
+        skill = self.root / 'SKILL.md'
+        skill.write_text('---\nname: sample\ndescription: old\n---\nBody\n')
+        self.assertTrue(self.overlay._replace_description(skill, 'Use when testing.'))
+        with patch.object(Path, 'write_text', side_effect=AssertionError('unnecessary write')):
+            self.assertFalse(self.overlay._replace_description(skill, 'Use when testing.'))
+
 
 class RetirementTests(unittest.TestCase):
     def setUp(self):
@@ -62,7 +84,7 @@ class RetirementTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.prune = load('prune', 'prune-cursor-scan-paths.py')
-        for name, rel in [('HOME','.'),('AGENTS','.agents/skills'),('CURSOR','.cursor/skills'),('CODEX','.codex/skills'),('CLAUDE','.claude/skills')]:
+        for name, rel in [('HOME','.'),('AGENTS','.agents/skills'),('CURSOR','.cursor/skills'),('CODEX','.codex/skills'),('CLAUDE','.claude/skills'),('GROK','.grok/skills')]:
             value = self.root / rel
             value.mkdir(parents=True, exist_ok=True)
             setattr(self.prune, name, value)
@@ -111,6 +133,83 @@ class RetirementTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.prune.archive([link])
         self.assertTrue(link.is_symlink())
         self.assertFalse((self.root / '.agents/skill-archive').exists())
+
+    def test_broken_grok_link_is_candidate_but_working_alias_is_preserved(self):
+        broken = self.prune.GROK / 'retired'
+        broken.symlink_to(self.prune.AGENTS / 'retired')
+        working = self.prune.GROK / 'example'
+        working.symlink_to(self.skill)
+        self.assertEqual(self.prune.candidates(), [broken])
+        dest = self.prune.archive([broken])
+        self.assertTrue((dest / '.grok/retired').is_symlink())
+        self.assertTrue(working.is_symlink())
+
+
+class SkillSyncTests(unittest.TestCase):
+    def test_node_alias_matches_version_components(self):
+        sync = load('sync_node', 'sync-claude-skills.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sync.NVM = root / 'nvm'
+            sync.NODE_LINK = root / 'node-current'
+            alias = sync.NVM / 'alias/default'
+            alias.parent.mkdir(parents=True)
+            versions = sync.NVM / 'versions/node'
+            for version in ('v26.1.0', 'v26.1.2', 'v26.10.0', 'v26.10.1'):
+                (versions / version).mkdir(parents=True)
+            for requested, expected in [('26.1', 'v26.1.2'), ('v26.1.0', 'v26.1.0'), ('26', 'v26.10.1')]:
+                with self.subTest(alias=requested):
+                    alias.write_text(requested + '\n')
+                    sync.sync_node_link()
+                    self.assertEqual(sync.NODE_LINK.resolve(), (versions / expected).resolve())
+
+    def test_unmatched_node_alias_preserves_existing_runtime(self):
+        sync = load('sync_node_missing', 'sync-claude-skills.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sync.NVM = root / 'nvm'
+            sync.NODE_LINK = root / 'node-current'
+            alias = sync.NVM / 'alias/default'
+            alias.parent.mkdir(parents=True)
+            alias.write_text('26.1\n')
+            installed = sync.NVM / 'versions/node/v26.10.0'
+            installed.mkdir(parents=True)
+            sync.NODE_LINK.symlink_to(installed)
+            self.assertIn('no install matches', sync.sync_node_link())
+            self.assertEqual(sync.NODE_LINK.resolve(), installed.resolve())
+
+    def test_host_copies_are_reported_without_moves_or_cross_host_links(self):
+        sync = load('sync', 'sync-claude-skills.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sync.CANON = root / 'canon'
+            sync.HOST_BUILTINS = root / 'builtins'
+            sync.PONYTAIL = root / 'plugins'
+            sync.VIEWS = {'claude': root / 'claude'}
+            for parent in (sync.CANON, sync.HOST_BUILTINS):
+                skill = parent / 'create-hook'
+                skill.mkdir(parents=True)
+                (skill / 'SKILL.md').write_text('Cursor-only instructions\n')
+            with patch.object(sync, 'sync_node_link', return_value='node unchanged'):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(sync.main(), 0)
+            self.assertTrue((sync.CANON / 'create-hook/SKILL.md').is_file())
+            self.assertFalse((sync.VIEWS['claude'] / 'create-hook').exists())
+            self.assertEqual(sync.host_copies(), ['create-hook'])
+
+    def test_custom_shared_skill_can_override_a_builtin_name(self):
+        sync = load('sync_custom', 'sync-claude-skills.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sync.CANON = root / 'canon'
+            sync.HOST_BUILTINS = root / 'builtins'
+            sync.PONYTAIL = root / 'plugins'
+            for parent, text in ((sync.CANON, 'Host-aware shared instructions'), (sync.HOST_BUILTINS, 'Cursor-only instructions')):
+                skill = parent / 'create-hook'
+                skill.mkdir(parents=True)
+                (skill / 'SKILL.md').write_text(text)
+            self.assertEqual(sync.host_copies(), [])
+            self.assertEqual(sync.wanted(), {'create-hook': sync.CANON / 'create-hook'})
 
 
 if __name__ == '__main__': unittest.main()
