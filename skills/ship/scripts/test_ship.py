@@ -15,6 +15,8 @@ CLEAN = {'ok': True, 'summary': 'test clean'}
 
 
 class GitFixture(unittest.TestCase):
+    """Disposable repo with an isolated Git config."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -27,6 +29,9 @@ class GitFixture(unittest.TestCase):
         self.git('config', 'commit.gpgsign', 'false')
         self.git('config', 'core.hooksPath', str(self.root / 'no-hooks'))
         self.git('config', 'core.excludesFile', str(self.root / 'no-ignore'))
+        recent = patch.object(ship, 'RECENT_SECONDS', 0)
+        recent.start()
+        self.addCleanup(recent.stop)
         (self.repo / 'a.txt').write_text('one\n')
         self.git('add', 'a.txt')
         self.git('commit', '-m', 'initial')
@@ -42,8 +47,18 @@ class GitFixture(unittest.TestCase):
         self.git('push', '-u', 'origin', 'main')
         return remote
 
-    def remote_head(self, remote):
-        return subprocess.run(['git', '--git-dir', str(remote), 'rev-parse', 'main'],
+    def upstream_commit(self, remote, name='up.txt', text='upstream\n'):
+        clone = self.root / 'clone'
+        if not clone.exists():
+            subprocess.run(['git', 'clone', '-q', str(remote), str(clone)], check=True)
+            for args in (['config', 'user.email', 'o@example.invalid'], ['config', 'user.name', 'O']):
+                subprocess.run(['git', '-C', str(clone), *args], check=True)
+        (clone / name).write_text(text)
+        for args in (['add', name], ['commit', '-q', '-m', f'upstream {name}'], ['push', '-q']):
+            subprocess.run(['git', '-C', str(clone), *args], check=True, capture_output=True)
+
+    def remote_head(self, remote, branch='main'):
+        return subprocess.run(['git', '--git-dir', str(remote), 'rev-parse', branch],
                               check=True, capture_output=True, text=True).stdout.strip()
 
     def main(self, *argv, scan=CLEAN):
@@ -53,6 +68,8 @@ class GitFixture(unittest.TestCase):
             code = ship.main()
         return code, json.loads(output.getvalue()), scanner
 
+
+class ShipTests(GitFixture):
     def test_plan_does_not_scan_or_change_the_tree(self):
         (self.repo / 'a.txt').write_text('two\n')
         code, payload, scanner = self.main()
@@ -105,10 +122,21 @@ class GitFixture(unittest.TestCase):
 
     def test_apply_requires_message(self):
         (self.repo / 'a.txt').write_text('two\n')
-        code, payload, scanner = self.main('--apply')
+        code, payload, scanner = self.main('--apply', 'a.txt')
         self.assertEqual(code, 1)
         self.assertIn('commit message required: -m', payload['blockers'])
         scanner.assert_not_called()
+
+    def test_apply_without_message_or_paths_only_pushes(self):
+        remote = self.remote()
+        self.git('commit', '--allow-empty', '-m', 'local')
+        (self.repo / 'a.txt').write_text('two\n')
+        code, payload, _ = self.main('--apply')
+        self.assertEqual(code, 0, payload)
+        self.assertEqual([d['op'] for d in payload['done']], ['push'])
+        self.assertEqual(payload['left'], ['a.txt'])
+        self.assertTrue(any('not committed' in w for w in payload['warnings']))
+        self.assertEqual(self.remote_head(remote), self.git('rev-parse', 'HEAD'))
 
     def test_named_secret_or_unchanged_path_blocks(self):
         (self.repo / '.env').write_text('x')
@@ -135,6 +163,7 @@ class GitFixture(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn('test blocked', payload['blockers'])
         self.assertEqual(self.git('rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.git('diff', '--cached', '--name-only'), '')
 
     def test_failed_fetch_blocks_scan_and_apply(self):
         (self.repo / 'a.txt').write_text('two\n')
@@ -144,16 +173,90 @@ class GitFixture(unittest.TestCase):
         scanner.assert_not_called()
         self.assertEqual(self.git('rev-list', '--count', 'HEAD'), '1')
 
-    def test_plan_fetches_and_reports_behind(self):
+    def test_plan_fetches_and_plans_integration(self):
         remote = self.remote()
-        clone = self.root / 'clone'
-        subprocess.run(['git', 'clone', '-q', str(remote), str(clone)], check=True)
-        for args in (['config', 'user.email', 'o@example.invalid'], ['config', 'user.name', 'O'],
-                     ['commit', '-q', '--allow-empty', '-m', 'upstream'], ['push', '-q']):
-            subprocess.run(['git', '-C', str(clone), *args], check=True)
+        self.upstream_commit(remote)
+        (self.repo / 'a.txt').write_text('two\n')
         code, payload, _ = self.main()
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 2, payload)
         self.assertEqual(payload['repo']['behind'], 1)
+        self.assertEqual([op['op'] for op in payload['pending']], ['commit', 'integrate', 'push'])
+
+    def test_behind_rebases_then_asks_for_revalidation(self):
+        remote = self.remote()
+        self.upstream_commit(remote)
+        (self.repo / 'a.txt').write_text('two\n')
+        (self.repo / 'other.txt').write_text('unrelated work')
+        code, payload, _ = self.main('--apply', '-m', 'fix: a', 'a.txt')
+        self.assertEqual(code, 2, payload)
+        self.assertIn('revalidate', payload)
+        self.assertEqual([d['op'] for d in payload['done']], ['commit', 'integrate'])
+        self.assertTrue((self.repo / 'up.txt').exists())
+        self.assertEqual(self.git('status', '--porcelain'), '?? other.txt')
+        self.assertNotEqual(self.remote_head(remote), self.git('rev-parse', 'HEAD'))
+        code, payload, _ = self.main('--apply')
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(payload['verified'])
+        self.assertEqual(self.remote_head(remote), self.git('rev-parse', 'HEAD'))
+        self.assertEqual(self.git('log', '-1', '--format=%s'), 'fix: a')
+
+    def test_rebase_keeps_dirty_tracked_edits(self):
+        remote = self.remote()
+        (self.repo / 'b.txt').write_text('base\n')
+        self.git('add', 'b.txt')
+        self.git('commit', '-m', 'b')
+        self.git('push', '-q')
+        self.upstream_commit(remote)
+        (self.repo / 'a.txt').write_text('two\n')
+        (self.repo / 'b.txt').write_text('unrelated edit\n')
+        code, payload, _ = self.main('--apply', '-m', 'fix: a', 'a.txt')
+        self.assertEqual(code, 2, payload)
+        self.assertEqual(self.git('status', '--porcelain'), 'M b.txt')
+        self.assertEqual(self.git('stash', 'list'), '')
+
+    def test_rebase_conflict_aborts_and_blocks(self):
+        remote = self.remote()
+        self.upstream_commit(remote, 'a.txt', 'theirs\n')
+        (self.repo / 'a.txt').write_text('ours\n')
+        code, payload, _ = self.main('--apply', '-m', 'fix: a')
+        self.assertEqual(code, 1, payload)
+        self.assertTrue(any('conflicts' in b for b in payload['blockers']))
+        self.assertEqual(self.git('status', '--porcelain'), '')
+        self.assertEqual(self.git('log', '-1', '--format=%s'), 'fix: a')
+        self.assertFalse((self.repo / '.git' / 'rebase-merge').exists())
+
+    def test_to_ships_a_session_branch_onto_main(self):
+        remote = self.remote()
+        self.upstream_commit(remote)
+        self.git('switch', '-q', '-c', 'cc/session')
+        (self.repo / 'a.txt').write_text('two\n')
+        code, payload, _ = self.main('--apply', '--to', 'main', '-m', 'fix: a')
+        self.assertEqual(code, 2, payload)
+        code, payload, _ = self.main('--apply', '--to', 'main')
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(self.remote_head(remote), self.git('rev-parse', 'HEAD'))
+        self.assertEqual(self.git('branch', '--show-current'), 'cc/session')
+
+    def test_untracked_remote_branch_needs_to(self):
+        self.remote()
+        self.git('branch', '--unset-upstream')
+        code, payload, _ = self.main()
+        self.assertEqual(code, 1, payload)
+        self.assertTrue(any('--to main' in b for b in payload['blockers']))
+
+    def test_deploy_hints(self):
+        (self.repo / '.github' / 'workflows').mkdir(parents=True)
+        (self.repo / '.github' / 'workflows' / 'deploy.yml').write_text('run: npx wrangler deploy\n')
+        (self.repo / '.github' / 'workflows' / 'lint.yml').write_text('run: npm test\n')
+        (self.repo / 'package.json').write_text('{"scripts": {"deploy": "x", "build": "y", "release:ios": "z"}}')
+        (self.repo / 'pnpm-lock.yaml').write_text('')
+        (self.repo / 'site').mkdir()
+        (self.repo / 'site' / 'wrangler.jsonc').write_text('{}')
+        self.assertEqual(ship.deploy_hints(self.repo), {
+            'ci': ['.github/workflows/deploy.yml'],
+            'scripts': ['pnpm run deploy', 'pnpm run release:ios'],
+            'wrangler': ['site/wrangler.jsonc'],
+        })
 
     def test_push_only_when_ahead(self):
         remote = self.remote()
@@ -202,8 +305,9 @@ class GitFixture(unittest.TestCase):
         self.git('remote', 'add', 'origin', str(remote))
         code, payload, _ = self.main()
         self.assertEqual(code, 2, payload)
-        self.assertIn('no upstream; push publishes this branch', payload['warnings'])
-        self.assertEqual(payload['repo']['unpushed'], [])
+        self.assertIn('origin/main does not exist; push publishes it', payload['warnings'])
+        self.assertEqual(len(payload['repo']['unpushed']), 1)
+        self.assertTrue(payload['pending'][-1]['set_upstream'])
 
     def test_oversize_file_blocks_before_commit(self):
         (self.repo / 'huge.bin').write_bytes(b'x' * 20)
@@ -323,6 +427,15 @@ class GitFixture(unittest.TestCase):
         self.assertTrue(other.exists())
         self.assertTrue(any('push failed' in item for item in payload['blockers']))
 
+    def test_recent_worktree_stays(self):
+        other = self.root / 'live-session'
+        self.git('worktree', 'add', '-b', 'live', str(other))
+        with patch.object(ship, 'RECENT_SECONDS', 3600):
+            code, payload, _ = self.main('--apply')
+        self.assertEqual(code, 0, payload)
+        self.assertTrue(other.exists())
+        self.assertEqual(payload['cleanup'][0]['reason'], 'recent')
+
     def test_missing_worktree_is_pruned(self):
         other = self.root / 'old-tree'
         self.git('worktree', 'add', '-b', 'old', str(other))
@@ -346,13 +459,48 @@ class GitFixture(unittest.TestCase):
 
 class ScanTests(unittest.TestCase):
     def test_missing_scanner_blocks(self):
-        with patch.object(ship, 'PREFLIGHT', Path('/does-not-exist/scan.sh')):
-            self.assertFalse(ship.scan(Path('/unused'))['ok'])
+        with patch.object(ship.shutil, 'which', return_value=None):
+            self.assertFalse(ship.scan(Path('/unused'), 'origin')['ok'])
 
     def test_scanner_output_is_not_exposed(self):
-        with patch.object(Path, 'is_file', return_value=True), \
+        with patch.object(ship.shutil, 'which', return_value='/bin/gitleaks'), \
              patch.object(ship.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, 'sensitive diagnostic', '')):
-            self.assertNotIn('sensitive diagnostic', str(ship.scan(Path('/unused'))))
+            self.assertNotIn('sensitive diagnostic', str(ship.scan(Path('/unused'), 'origin')))
+
+
+@unittest.skipUnless(shutil.which('gitleaks'), 'gitleaks not installed')
+class RealScanTests(GitFixture):
+    """The scan covers what the push sends, not history the remote already has."""
+    TOKEN = 'ghp_' + 'Zq7Rk2Lm9Xw4Tb8Nc1Vd6Hf3Jg5Ps0Ya2Ue7Wi'
+
+    def main(self, *argv):
+        with patch.object(ship, 'current_repo', return_value=self.repo), \
+             patch('sys.argv', ['ship.py', *argv]), contextlib.redirect_stdout(io.StringIO()) as output:
+            code = ship.main()
+        return code, json.loads(output.getvalue())
+
+    def test_staged_leak_blocks_and_unstages(self):
+        self.remote()
+        (self.repo / 'config.txt').write_text(f'token = "{self.TOKEN}"\n')
+        code, payload = self.main('--apply', '-m', 'x')
+        self.assertEqual(code, 1, payload)
+        self.assertNotIn(self.TOKEN, json.dumps(payload))
+        self.assertEqual(self.git('diff', '--cached', '--name-only'), '')
+        self.assertEqual(self.git('rev-list', '--count', 'HEAD'), '1')
+
+    def test_pushed_history_and_ignored_files_do_not_block(self):
+        remote = self.remote()
+        (self.repo / 'old.txt').write_text(f'token = "{self.TOKEN}"\n')
+        self.git('add', 'old.txt')
+        self.git('commit', '-m', 'old leak already on the remote')
+        self.git('push', '-q')
+        (self.repo / '.gitignore').write_text('local/\n')
+        (self.repo / 'local').mkdir()
+        (self.repo / 'local' / 'notes.txt').write_text(f'token = "{self.TOKEN}"\n')
+        (self.repo / 'a.txt').write_text('two\n')
+        code, payload = self.main('--apply', '-m', 'fix: a', 'a.txt')
+        self.assertEqual(code, 0, payload)
+        self.assertEqual(self.remote_head(remote), self.git('rev-parse', 'HEAD'))
 
 
 if __name__ == '__main__':

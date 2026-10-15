@@ -6,51 +6,51 @@ disable-model-invocation: true
 
 # Ship
 
-`/ship` gives permission to commit, push, and deploy the active project. Obey the project `AGENTS.md` and any narrower request. Do not send an app to the App Store. Ask Cohen for each step the project marks as owner-only. A request to edit this skill is not permission to ship.
+`/ship` authorizes commit, push, deploy, and live checks for the active project. Run the full flow without check-ins. Stop only for a blocker you cannot fix or a step the project `AGENTS.md` marks owner-only. Project release scripts may upload to TestFlight and notarize; never submit for App Review without Cohen's explicit yes. A request to edit this skill is not permission to ship.
 
-Work in the current Git repository only. If the current directory is not a repository, stop and say which project is missing.
+Work in the current Git repository only. If there is none, stop and name the missing project.
 
-## 1. Plan
+## 1. Plan and check
 
-Read the project `AGENTS.md` for build, test, and deploy steps. Then run:
+Read the release section of the project `AGENTS.md`, then run:
 
 ```bash
 python3 ~/.agents/skills/ship/scripts/ship.py
 ```
 
-Plan mode fetches the remote and prints JSON. It changes nothing. Read:
+Plan mode fetches, changes nothing, and prints one JSON line. Exit `0` nothing to ship, `1` blocked, `2` work pending.
 
-- `buckets`: `secret`, `noise`, and `archive` are excluded; never commit them. `commit` holds the other changed files. Read the diff and commit only the files for this task.
-- `unpushed` (max 20) and `ahead`: every commit a push will send. If one is not part of this task, stop. A push with no upstream sends the full branch.
-- `blockers` (files over 100 MB, and others): remove each before Apply. `warnings` (over 50 MB): put in the report.
-- `cleanup`: other worktrees. Apply removes only clean, unlocked, fully merged worktrees, and moves leftover directories to Trash. Never use `rm`.
+- `repo.buckets.commit`: changed files. Commit only this task's files; name them as paths when others are present. `secret`, `noise`, and `archive` never commit.
+- `repo.unpushed` / `repo.ahead`: every commit the push sends. Stop if one is not part of this task.
+- `blockers`: fix each and plan again. `warnings`: carry into the report.
+- `pending`: what Apply will do (`commit`, `integrate`, `push`, `cleanup`).
+- `deploy`: CI workflows, deploy scripts, and Wrangler configs found in the repo.
+- Session or feature branch (`repo.branch` is not `repo.default_branch`): if the project deploys from the default branch and does not require PRs, add `--to <default_branch>` to Apply. Otherwise push the branch.
 
-If the branch is behind, add only this task's changes. Do not touch other branches or stashes. Run the build, tests, and checks on the final code and fix each failure.
+Run the project's build, tests, and lint/format on the final code and fix each failure.
 
 ## 2. Apply
 
 ```bash
-python3 ~/.agents/skills/ship/scripts/ship.py --apply -m "<type>: <imperative summary>" -m "<trailers>" [path ...]
+python3 ~/.agents/skills/ship/scripts/ship.py --apply -m "<type>: <imperative summary>" -m "<trailers>" [--to <branch>] [path ...]
 ```
 
-Pass exact paths when `commit` holds files outside this task; with no paths, the full `commit` bucket is committed. Each `-m` is one paragraph; trailers go last.
+Each `-m` is one paragraph; trailers go last. With no paths, the whole `commit` bucket is committed. Apply re-fetches, then: stages, scans the staged diff and unpushed commits with gitleaks (verdict only), commits, rebases onto the remote branch if behind, pushes `HEAD` (never forced), confirms the remote SHA (`verified`), and removes old worktrees (clean, merged, untouched for 72 hours; leftover folders go to Trash).
 
-Apply re-fetches, stops on blockers, runs `gitleaks-preflight`, commits, pushes `HEAD` (with `-u` on the first push), and then removes old worktrees. Exit codes: `0` done or nothing to do; `1` blocked or failed (read `blockers`); `2` pending work.
-
-If the scan fails, use `gitleaks-preflight` and read only the redacted result. Allow a finding only after you confirm a false positive. Never print a secret or read a credential or environment file.
-
-Do not force-push, skip hooks, or amend unless Cohen asks. If a push fails or times out, run `git ls-remote <remote> <branch>` before anything else. Never re-run Apply or a deploy automatically.
+- `revalidate` (exit `2`): upstream commits were rebased in. Re-run the checks, then run Apply again with no `-m` and no paths (plus the same `--to`). Without `-m` and paths, Apply never commits; it only pushes.
+- Rebase conflict: Apply aborts the rebase and the commit stays local. Resolve it, re-run checks, apply again.
+- Scan finding: nothing is committed and the index is restored. Use `gitleaks-preflight` and read only redacted output. Allow a finding only after you confirm a false positive.
+- Push failed or timed out: run `git ls-remote <remote> <branch>` first. Never re-run Apply or a deploy automatically.
+- Do not force-push, skip hooks, or amend unless Cohen asks. Never print a secret or read a credential or environment file.
 
 ## 3. Deploy
 
-`ship.py` does not deploy. Use the project's release scripts and the `deploy-cloudflare` skill. Keep each named Worker environment.
+- CI deploys the pushed branch (see `deploy.ci`): do not also deploy by hand. Find the run with `gh run list --commit <sha> --json databaseId,status,workflowName`, then run `gh run watch <id> --exit-status` in the background. A queued run is not shipped.
+- Manual deploy: use the project's release script (`deploy.scripts`) and the `deploy-cloudflare` skill; keep each named Worker environment. A manual deploy uploads the working tree, not the commit: stop if `left` lists files inside the deploy inputs. Build, scan the output with `gitleaks dir <output> --redact --no-banner`, then deploy once.
+- No deploy defined: say so. The verified push is the ship.
 
-If CI deploys the pushed branch, follow that run for the pushed SHA until it succeeds. Do not also deploy by hand. A queued run is not shipped.
+## 4. Verify and report
 
-A manual deploy uploads the working tree or its build, not the commit. Commit first, then build. Stop if a dirty or untracked file would be uploaded (check `public/`, asset folders, `dist`). Scan the final deploy inputs, then run the deploy command once.
+Open the live URL and confirm the change itself, not only an HTTP 200. Use the built-in browser pane in Claude desktop, `ego-browser` in other clients, and Claude in Chrome when the check needs Cohen's logged-in session. If no browser connects, say the browser check did not run and finish the rest.
 
-## 4. Check and report
-
-Open the live URL in `ego-browser`; use Claude in Chrome when the check needs Cohen's logged-in session. If no browser connects, say the browser check did not run and finish the other checks. Confirm `git status` is clean for the shipped paths and the remote SHA equals `HEAD`.
-
-Report the project, commit SHA, push destination, deploy status, URL, each check and result, each blocker, each removed worktree or Trash move, and each item not verified. Say "shipped" only for a confirmed result.
+Report the project, commit SHA, push destination and `verified`, deploy status and URL, each check and its result, warnings, removed worktrees and Trash moves, and each item not verified. Say "shipped" only when the push is verified and any deploy is confirmed live.
