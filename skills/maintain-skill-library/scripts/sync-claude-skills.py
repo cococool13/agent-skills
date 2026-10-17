@@ -21,6 +21,9 @@ HOST_BUILTINS = HOME / ".cursor/skills-cursor"
 PONYTAIL = HOME / ".grok/installed-plugins"
 # Unused plugin extras (2026-10-14 audit); Grok keeps them.
 PONYTAIL_SKIP = {"ponytail-audit", "ponytail-debt", "ponytail-gain", "ponytail-help"}
+# Claude-only skips (2026-10-15 audit): built-ins cover these; asc-* are linked per App Store project.
+CLAUDE_SKIP = {"code-review", "find-skills", "canvas", "ponytail-review"}
+CLAUDE_SKIP_PREFIXES = ("asc-",)
 VIEWS = {"claude": HOME / ".claude/skills", "cursor": HOME / ".cursor/skills"}
 NVM = HOME / ".nvm"
 NODE_LINK = HOME / ".local/share/node-current"
@@ -117,7 +120,10 @@ def main() -> int:
         print(f"host-specific copies retained for review: {', '.join(copies)}")
     targets = wanted()
     for host, dest in VIEWS.items():
-        print(f"{host} skills: {sync_view(dest, targets)}")
+        view = targets if host != "claude" else {
+            n: p for n, p in targets.items()
+            if n not in CLAUDE_SKIP and not n.startswith(CLAUDE_SKIP_PREFIXES)}
+        print(f"{host} skills: {sync_view(dest, view)}")
     print(sync_node_link())
     return 0
 
