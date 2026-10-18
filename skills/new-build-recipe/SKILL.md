@@ -26,7 +26,7 @@ Skip this phase when the build has no existing product to learn from.
 - In Claude Code, run `/pstack:poteto-mode`. In Cursor, run `/poteto-mode`.
 - Codex and Grok have no pstack. Follow these four phases directly; for the pre-commit cleanup pass, use the `code-review` skill, then the project's tests and linters.
 - Claude Code has no `cursor-team-kit`. When poteto-mode asks for `/deslop` before a commit, run the built-in `/simplify` instead. When it asks for `control-cli` or `control-ui`, use the `run` skill or the built-in browser pane.
-- Product rules still apply: Cloudflare hosting, Whop for paid web access, project names in Title Case under `~/Projects/`.
+- Product rules still apply: Cloudflare hosting, paid web/Mac access through Stripe via the shared `~/Projects/licensing` Worker (test mode until Cohen goes live), project names in Title Case under `~/Projects/`.
 
 ## 4. Add guardrails
 
