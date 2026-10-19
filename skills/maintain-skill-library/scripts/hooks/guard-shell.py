@@ -10,11 +10,77 @@ import re
 import shlex
 import sys
 
-SECRET = r"(\.env(?!\.(example|sample|template)(?![\w.-]))\b|mcp\.env|mcp_credentials\.json|credentials\.json|auth\.json|\.netrc\b|\.npmrc\b|\.(pem|key|p8|p12|pfx)\b|id_rsa|id_ed25519|\.appstoreconnect/)"
+# A secret file path, not a member access like process.env or self.key(.
+SECRET = (
+    r"((?<![\w$.\\-])\.env(?!\.(example|sample|template)(?![\w.-]))(\.[\w-]+)?(?![\w(\[])"  # .env, site/.env, .env.local
+    r"|(?<=[\w-])(?<!process)(?<!\.meta)\.env(?=$|[\s'\"`;|&)>])"  # mcp.env, prod.env
+    r"|mcp_credentials\.json|(?<![\w-])(?<!exclude=)(credentials|auth)\.json|\.netrc\b|\.npmrc\b"
+    r"|[\w~*/-]\.(pem|key|p8|p12|pfx)(?=$|[\s'\"`;|&)>:,])"  # server.key, AuthKey_X.p8
+    r"|id_rsa|id_ed25519|\.appstoreconnect/)"
+)
 SECRET_READ = re.compile(
-    r"\b(cat|less|more|head|tail|bat|strings|xxd|base64|grep|rg|awk|sed|source|cp|scp|curl\s+.*-d\s*@)\b[^|;&]*" + SECRET,
+    r"(\b(cat|less|more|head|tail|bat|strings|xxd|base64|grep|rg|awk|sed|source|cp|scp)\b|\bcurl\s.*-d\s*@)[^|;&\n]*" + SECRET,
     re.I,
 )
+# Interpreter code fed by a heredoc: catch direct file reads of a secret path.
+SECRET_IN_CODE = re.compile(
+    r"\b(open|read_text|read_bytes|readFileSync|readFile|load_dotenv|dotenv_values|Path)\s*\(\s*[^)\n]*" + SECRET,
+    re.I,
+)
+# A shell verb named as a string inside interpreter code, e.g. subprocess.run(["cat", ".env"]).
+SECRET_SUBPROCESS = re.compile(
+    r"[\"'](cat|less|more|head|tail|strings|xxd|base64|grep|rg|awk|sed|source|cp|scp)\b[^\n]*" + SECRET,
+    re.I,
+)
+HEREDOC = re.compile(r"(?<!<)<<-?(?!<)\s*(['\"]?)([A-Za-z_][\w-]*)\1")
+SHELL_FED = re.compile(r"\b(sh|bash|zsh|dash|ksh|ssh|eval|source|xargs)\b")
+FILE_WRITE = re.compile(r"\b(cat|tee)\b")
+
+
+def _split_heredocs(cmd: str) -> tuple[str, str]:
+    """Return (shell text, interpreter heredoc bodies).
+
+    A body written to a file (cat > f <<EOF, tee f <<EOF) is data, so it is dropped.
+    A body fed to a shell stays shell text. Any other body is interpreter code.
+    """
+    lines = cmd.split("\n")
+    shell, code = [], []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        shell.append(line)
+        i += 1
+        m = HEREDOC.search(line)
+        if not m:
+            continue
+        tag, strip_tabs = m.group(2), line[m.start():m.start() + 3] == "<<-"
+        body = []
+        while i < len(lines) and (lines[i].lstrip("\t") if strip_tabs else lines[i]) != tag:
+            body.append(lines[i])
+            i += 1
+        if i < len(lines):
+            shell.append(lines[i])  # closing tag
+            i += 1
+        head = line[:m.start()].split("|")[-1].split("&&")[-1].split(";")[-1]
+        tail = line[m.end():]
+        if SHELL_FED.search(tail) or (SHELL_FED.search(head) and not FILE_WRITE.search(head)):
+            shell.extend(body)  # piped or fed to a shell: still commands
+        elif FILE_WRITE.search(head):
+            continue  # written to a file or printed: data
+        else:
+            code.extend(body)
+    return "\n".join(shell), "\n".join(code)
+
+
+def secret_read(cmd: str) -> bool:
+    shell, code = _split_heredocs(cmd)
+    return bool(
+        SECRET_READ.search(shell)
+        or SECRET_IN_CODE.search(shell)
+        or SECRET_IN_CODE.search(code)
+        or SECRET_SUBPROCESS.search(code)
+    )
+
 
 DESTRUCTIVE = [
     r"\brm\s+(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|-r\s+-f|-f\s+-r)[a-z]*\s+(~|\$HOME|/)(/?\*?\s*$|/?\s|$)",
@@ -70,7 +136,7 @@ def decide(cmd: str) -> tuple[str, str]:
             token and all(char in "();<>|&" for char in token) for token in tokens
         ):
             return "allow", ""
-    if SECRET_READ.search(cmd):
+    if secret_read(cmd):
         return "deny", "Do not read secret/credential files. Check key names in code or docs instead."
     if any(re.search(p, cmd, re.I) for p in DESTRUCTIVE):
         return "ask", "Destructive command flagged. Wait for Cohen's approval."
