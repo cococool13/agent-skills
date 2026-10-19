@@ -72,8 +72,10 @@ Name vars only; do not print values.
 
 ## Verify
 
-Open the workers.dev / pages.dev URL from the deploy output in `ego-browser`.
-Use Claude in Chrome when the check needs Cohen's logged-in Cloudflare session.
+Open the workers.dev / pages.dev URL from the deploy output in the browser that
+`~/.agents/AGENTS.md` routes to: the built-in browser pane in the Claude desktop
+app, `ego-browser` in other clients. Use the client's Chrome tools when the check
+needs Cohen's logged-in Cloudflare session.
 Confirm the change on the real page, not just HTTP 200. If no browser connects,
 say the browser check did not run.
 
