@@ -19,6 +19,9 @@ SECRET_READ = re.compile(
 DESTRUCTIVE = [
     r"\brm\s+(-[a-z]*r[a-z]*f|-[a-z]*f[a-z]*r|-r\s+-f|-f\s+-r)[a-z]*\s+(~|\$HOME|/)(/?\*?\s*$|/?\s|$)",
     r"\bgit\s+push\s+.*(--force|-f\b).*\b(main|master)\b",
+    r"\bgit\s+push\s+.*\s\+\S*\b(main|master)\b",  # +refspec force-push
+    r"\bgit\b.*\s--no-verify\b",
+    r"\bgit\s+commit\s+(-\S+\s+)*-n\b",
     r"\bgit\s+reset\s+--hard\b",
     r"\bdrop\s+(database|table)\b",
     r"\bmkfs\b",
@@ -33,6 +36,7 @@ DEPLOY = [
     r"\bpnpm\s+(run\s+)?deploy\b",
     r"\bgh\s+release\s+create\b",
     r"\basc\.py\b.*(--yes|review-send|submit)",
+    r"\basc\s+.*--submit\b",  # asc publish appstore --submit
 ]
 
 
