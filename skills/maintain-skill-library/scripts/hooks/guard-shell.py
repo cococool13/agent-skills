@@ -93,6 +93,8 @@ ASK = [
     r"\basc\.py\b.*(--yes|review-send|submit)",
     r"\basc\s+.*--submit\b",  # asc publish appstore --submit
     r"\bfastlane\s+(deliver|pilot|upload_to)",
+    # The Stripe CLI here defaults to LIVE mode: ask unless the command is test-mode or local-only.
+    CMD + r"stripe\s(?![^;&|\n]*(--test\b|sk_test_|\blisten\b|\btrigger\b|--version\b|\bconfig\b|--help\b))",
 ]
 
 BUILD_DIRS = {

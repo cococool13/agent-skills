@@ -57,7 +57,7 @@ EXTRA_DENY = [
     "git status; env",
     "stripe charges create --live",
 ]
-EXTRA_ASK = ["npm publish", "gh release create v1", "xcrun notarytool submit app.zip", "gh pr merge 3", "git reset --hard"]
+EXTRA_ASK = ["stripe customers list", "npm publish", "gh release create v1", "xcrun notarytool submit app.zip", "gh pr merge 3", "git reset --hard"]
 EXTRA_ALLOW = [
     "rm -rf node_modules",
     "rm -rf ~/Projects/Example/dist",
@@ -73,6 +73,8 @@ EXTRA_ALLOW = [
     "jq keys package.json",
     'echo "wrangler deploy"',
     "cat .env.example",
+    "stripe listen --forward-to localhost:8787/webhook",
+    "stripe products list --test",
 ]
 
 
