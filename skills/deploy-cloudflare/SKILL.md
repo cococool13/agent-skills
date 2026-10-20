@@ -12,8 +12,8 @@ they win on commands, project name, and secrets.
 
 | Site | Host |
 | --- | --- |
-| Spiral Collection, spiral-brief, Pulse, Portfolio | Pages |
-| ENTR, JCC forms/evaluator/SECURE/calculators, PropScanner | Workers |
+| Spiral Collection, spiral-brief, Portfolio | Pages |
+| ENTR, JCC forms/evaluator/SECURE/calculators | Workers |
 
 ## Pick the mode from the repo
 
@@ -52,7 +52,7 @@ npx wrangler deploy
 Check `.assetsignore` before deploy so `.env*`, `_archive/`, and `*.md` are not
 uploaded.
 
-## Workers apps (JCC forms, evaluator, PropScanner OpenNext)
+## Workers apps (JCC forms, evaluator)
 
 Follow the project's scripts (`npm run deploy`, `opennextjs-cloudflare deploy`,
 `wrangler deploy --env jcc`). Named `--env` values matter — a bare deploy can
