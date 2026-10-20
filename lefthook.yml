@@ -1,0 +1,8 @@
+# Pre-commit: guard hook contract tests and a staged secret scan.
+pre-commit:
+  commands:
+    guard-tests:
+      glob: "skills/maintain-skill-library/scripts/hooks/*"
+      run: /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/test_guard.py && /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/session-budget.py --selftest
+    gitleaks:
+      run: gitleaks protect --staged --redact --no-banner
