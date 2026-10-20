@@ -37,6 +37,59 @@ def metadata(text: str) -> tuple[str, str]:
     return result['name'], result['description']
 
 
+BARE_TOOLS = {'Bash', 'Write', 'Edit'}
+AGENTS_MD_LIMIT = 9500
+
+
+def allowed_tools(text: str) -> list[str]:
+    """Tool names from `allowed-tools` (inline string/list or YAML list)."""
+    if not text.startswith('---\n') or '\n---' not in text[4:]:
+        return []
+    lines = text.split('---', 2)[1].splitlines()
+    for i, line in enumerate(lines):
+        match = re.match(r'^allowed-tools:\s*(.*)$', line)
+        if not match:
+            continue
+        value = match.group(1).strip()
+        if value:
+            return [t.strip().strip('"\'') for t in re.split(r',(?![^(]*\))', value.strip('[]')) if t.strip()]
+        tools = []
+        for following in lines[i + 1:]:
+            item = re.match(r'^\s+-\s*(.+)$', following)
+            if not item:
+                break
+            tools.append(item.group(1).strip().strip('"\''))
+        return tools
+    return []
+
+
+def third_party_names(lock: Path) -> set[str]:
+    try:
+        skills = json.loads(lock.read_text()).get('skills', {})
+    except (OSError, ValueError):
+        return set()
+    return {name for name, entry in skills.items() if not str(entry.get('source', '')).startswith('cococool13/')}
+
+
+def bare_tool_grants(root: Path, lock: Path) -> list[str]:
+    problems = []
+    for name in sorted(third_party_names(lock)):
+        skill = root / name / 'SKILL.md'
+        if not skill.is_file():
+            continue
+        bare = sorted(BARE_TOOLS.intersection(allowed_tools(skill.read_text())))
+        if bare:
+            problems.append(f'{name}: third-party allowed-tools grants bare {", ".join(bare)}; strip it with an instruction overlay')
+    return problems
+
+
+def agents_md_size(path: Path) -> list[str]:
+    if not path.is_file():
+        return []
+    size = len(path.read_text())
+    return [f'{path}: {size} characters; keep it under {AGENTS_MD_LIMIT}'] if size >= AGENTS_MD_LIMIT else []
+
+
 def audit(root: Path, overlays: Path) -> dict:
     rows, errors, warnings = [], [], []
     for folder in sorted(root.iterdir()) if root.is_dir() else []:
@@ -88,12 +141,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path.home() / '.agents/skills')
     parser.add_argument('--overlays', type=Path, default=Path.home() / '.agents/skill-overlays/descriptions')
+    parser.add_argument('--lock', type=Path, default=Path.home() / '.agents/.skill-lock.json')
+    parser.add_argument('--agents-md', type=Path, default=Path.home() / '.agents/AGENTS.md')
     parser.add_argument('--json', action='store_true')
     parser.add_argument('--rules', type=Path, action='append', help='Rule roots; defaults to this user’s Cursor and Claude rules')
     args = parser.parse_args()
     result = audit(args.root, args.overlays)
     rules = args.rules if args.rules is not None else [Path.home() / '.cursor/rules', Path.home() / '.claude/rules']
     result['errors'].extend(retired_skill_references(args.root, rules))
+    result['errors'].extend(bare_tool_grants(args.root, args.lock))
+    result['errors'].extend(agents_md_size(args.agents_md))
     if args.json:
         print(json.dumps(result, indent=2))
     else:

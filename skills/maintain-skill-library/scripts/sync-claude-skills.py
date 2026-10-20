@@ -24,7 +24,13 @@ PONYTAIL_SKIP = {"ponytail-audit", "ponytail-debt", "ponytail-gain", "ponytail-h
 # Claude-only skips (2026-10-15 audit): built-ins cover these; asc-* are linked per App Store project.
 CLAUDE_SKIP = {"code-review", "find-skills", "canvas", "ponytail-review"}
 CLAUDE_SKIP_PREFIXES = ("asc-",)
+# Claude-only entries from ~/.agents/skill-overlays (B4-7): ego-browser defers to the built-in browser pane.
+CLAUDE_OVERRIDES = {"ego-browser": HOME / ".agents/skill-overlays/ego-browser/claude"}
 VIEWS = {"claude": HOME / ".claude/skills", "cursor": HOME / ".cursor/skills"}
+# App-owned links stay as the app made them (the app moves the target on update).
+APP_OWNED = (str(HOME / ".local/share/ego"),)
+# Link targets this script may prune when the skill leaves the canonical set.
+MANAGED_ROOTS = (".agents/skills", "ponytail-", "Projects/Agent Skills/skills/", "Projects/Stacks/skills/")
 NVM = HOME / ".nvm"
 NODE_LINK = HOME / ".local/share/node-current"
 
@@ -49,13 +55,24 @@ def host_copies() -> list[str]:
     return found
 
 
+def source_of(path: Path) -> Path:
+    """Link straight to the source, not through another link (SKL-011), except app-owned links."""
+    if path.is_symlink() and os.readlink(path).startswith(APP_OWNED):
+        return Path(os.readlink(path))
+    while path.is_symlink():  # follow links only; keep the rest of the path as written
+        raw = Path(os.readlink(path))
+        path = raw if raw.is_absolute() else (path.parent / raw)
+        path = Path(os.path.normpath(path))
+    return path
+
+
 def wanted() -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in sorted(CANON.iterdir()) if CANON.is_dir() else []:
         if is_host_copy(path):
             continue
         if not path.name.startswith(".") and (path / "SKILL.md").is_file():
-            found[path.name] = path
+            found[path.name] = source_of(path)
     for skill_root in sorted(PONYTAIL.glob("ponytail-*/skills")):
         for path in sorted(skill_root.iterdir()):
             if path.name in PONYTAIL_SKIP:
@@ -71,7 +88,7 @@ def sync_view(dest: Path, targets: dict[str, Path]) -> str:
     for name, target in targets.items():
         link = dest / name
         if link.is_symlink():
-            if Path(os.readlink(link)) == target or link.resolve() == target.resolve():
+            if Path(os.readlink(link)) == target:
                 counts["kept"] += 1
                 continue
             link.unlink()
@@ -84,7 +101,7 @@ def sync_view(dest: Path, targets: dict[str, Path]) -> str:
         if link.name in targets or link.name == "synced" or not link.is_symlink():
             continue
         raw = os.readlink(link)
-        if ".agents/skills" in raw or "ponytail-" in raw or not link.exists():
+        if any(root in raw for root in MANAGED_ROOTS) or not link.exists():
             link.unlink()
             counts["removed"] += 1
     return ", ".join(f"{v} {k}" for k, v in counts.items())
@@ -123,6 +140,8 @@ def main() -> int:
         view = targets if host != "claude" else {
             n: p for n, p in targets.items()
             if n not in CLAUDE_SKIP and not n.startswith(CLAUDE_SKIP_PREFIXES)}
+        if host == "claude":
+            view.update({n: p for n, p in CLAUDE_OVERRIDES.items() if (p / "SKILL.md").is_file()})
         print(f"{host} skills: {sync_view(dest, view)}")
     print(sync_node_link())
     return 0

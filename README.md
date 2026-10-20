@@ -20,7 +20,7 @@ npx skills add cococool13/agent-skills --all -g -y
 Keep always-on rules in **your** `~/.agents/AGENTS.md`. This repo’s `AGENTS.md`
 is a pointer only — do not copy global rules into it.
 
-Update later: `npx skills update -g -y`
+Update later: `npx skills update -g <name>` after reviewing the change
 
 ---
 
