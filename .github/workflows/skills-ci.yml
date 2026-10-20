@@ -1,0 +1,21 @@
+name: skills-ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - name: Skill frontmatter and listing budget
+        run: >
+          python3 skills/maintain-skill-library/scripts/audit-context.py
+          --root skills --overlays .ci-none --lock .ci-none --rules .ci-none
+          --agents-md AGENTS.md --listing-root skills
+      - name: Audit tests
+        run: python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_context_audit.py'
+      - name: Guard contract tests
+        run: /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/test_guard.py

@@ -13,7 +13,7 @@ class SharedHookTests(unittest.TestCase):
             [str(HOOKS / name)], input=json.dumps(data),
             text=True, capture_output=True, check=True,
         )
-        return json.loads(result.stdout)
+        return json.loads(result.stdout) if result.stdout.strip() else {}
 
     def decision(self, output):
         return output.get('hookSpecificOutput', {}).get('permissionDecision', output.get('permission', 'allow'))

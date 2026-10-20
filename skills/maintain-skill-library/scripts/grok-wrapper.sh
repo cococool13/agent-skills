@@ -1,10 +1,18 @@
 #!/bin/zsh
-# Give Grok the existing MCP environment used by the other local clients.
+# Give Grok only the two MCP tokens its config uses. Nothing else from
+# ~/.agents/mcp.env enters the environment; values never reach argv or output.
 set -euo pipefail
-if [[ -f "$HOME/.agents/mcp.env" ]]; then
-  set -a
-  # shellcheck disable=SC1091
-  source "$HOME/.agents/mcp.env"
-  set +a
+f="$HOME/.agents/mcp.env"
+if [[ -r "$f" ]]; then
+  while IFS= read -r l || [[ -n "$l" ]]; do
+    l="${l#export }"
+    case "${l%%=*}" in
+      REFERO_MCP_TOKEN|POSTHOG_MCP_TOKEN)
+        v="${l#*=}"; v="${v#[\"\']}"; v="${v%[\"\']}"
+        export "${l%%=*}=$v"
+        ;;
+    esac
+  done < "$f"
 fi
+unset f l v
 exec "$HOME/.grok/bin/grok" "$@"

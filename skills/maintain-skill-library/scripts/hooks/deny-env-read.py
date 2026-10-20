@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-"""Block agent reads of secret env/key files. Fail open on parse errors."""
+#!/usr/bin/python3
+"""Block agent reads of secret env/key files. Fail closed: a parse error exits 2 (block)."""
 import json
 import os
 import sys
@@ -18,6 +18,7 @@ DENY_NAMES = {
     "auth.json",
     ".netrc",
     ".npmrc",
+    ".dev.vars",
 }
 ALLOW_NAMES = {".env.example", ".env.sample", ".env.template"}
 DENY_SUFFIXES = (".pem", ".key", ".p12", ".pfx", ".p8")
@@ -45,8 +46,9 @@ def _emit(payload: dict, structured: bool = False) -> None:
             "hookEventName": "PreToolUse",
             "permissionDecision": decision,
             "permissionDecisionReason": payload.get("reason", ""),
-        }} if decision != "allow" else {}
-        print(json.dumps(output))
+        }} if decision != "allow" else None
+        if output:
+            print(json.dumps(output))  # allow prints nothing: native permissions apply
         return
     payload = {key: value for key, value in payload.items() if key in {"permission", "user_message", "agent_message"}}
     print(json.dumps(payload))
@@ -55,9 +57,11 @@ def _emit(payload: dict, structured: bool = False) -> None:
 def main() -> None:
     try:
         data = json.load(sys.stdin)
-    except Exception:
-        _emit({"permission": "allow", "decision": "allow"})
-        return
+        if not isinstance(data, dict):
+            raise ValueError("hook input is not an object")
+    except Exception as exc:  # fail closed
+        sys.stderr.write("deny-env-read: blocked, hook error: %s\n" % exc.__class__.__name__)
+        sys.exit(2)
 
     path = _path(data)
     base = os.path.basename(path)

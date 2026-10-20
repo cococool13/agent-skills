@@ -13,14 +13,17 @@ Adapt paths and schedule names to your machine. The table below is how the autho
 
 | Layer | Location | Auto-update |
 | --- | --- | --- |
-| Personal skills | `cococool13/agent-skills` → `~/.agents/skills` | `npx skills update -g -y` |
-| Upstream skills | emilkowalski, vercel-labs, uizze, citrolabs, etc. | same |
+| Personal skills | `cococool13/agent-skills` → `~/.agents/skills` | manual `skills update <name>` |
+| Upstream skills | emilkowalski, vercel-labs, uizze, citrolabs, etc. | pinned `ref` (commit sha) in the lock; weekly job applies pinned entries only |
 | Local overlays | `~/.agents/skill-overlays/` | `post-update-patches.py` after every update |
-| Archived | `qcc1-agentic-trading` (2026-10-01) | restore only when requested |
 
-Daily (10:00): LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
-from `~/Projects/Agent Skills/skills/maintain-skill-library/`:
-update → local overlays → conflict-checked instruction edits → report scan-path duplicates.
+Weekly (Monday 10:00): LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
+from `~/Projects/Agent Skills/skills/maintain-skill-library/` with the pinned CLI in
+`~/.local/share/skills` (`skills@1.7.2`; `npm ci` from `skills-cli/`): diff report in
+`~/Library/Logs/skills-update/<date>.md` → update of lock entries with a `ref` (no `-y`) →
+local overlays → conflict-checked instruction edits → report scan-path duplicates.
+`update-skills.sh --dry-run` writes the report and runs the checks only. To take an upstream
+change, review it, then move the entry's `ref` (`scripts/skill-refs.py report` / `pin`).
 The source checkout and `~/.agents/skill-overlays/instruction-edits.json` preserve
 local repairs across upstream updates. An override conflict fails the update and
 requires review instead of replacing changed upstream text blindly.
@@ -29,7 +32,7 @@ and Python/shell scripts to the installed shared skill. Unchanged files are skip
 app-owned links are preserved. Other skills retain their upstream ownership.
 
 Edit personal skills in your checkout of this repo (author path: `~/Projects/Agent Skills`), push to GitHub, then run the
-update script (or the author's daily 10:00 job).
+update script (or the author's weekly job).
 
 ## 1. Establish ownership
 
@@ -45,14 +48,16 @@ symlinks into the canonical library are intentional aliases, not second copies. 
 reports real host-specific copies instead of archiving them or exposing them to
 other clients. A deliberately host-aware personal skill may share a built-in name.
 
-After `npx skills update`, run
+After `skills update`, run
 `scripts/prune-cursor-scan-paths.py` to report extra scan-path copies. Its default
-is read-only; apply retirements only with explicit authorization. Preserve app-owned links. Daily LaunchAgent `com.cococool.skills-update` runs
-`scripts/update-skills.sh` (update then scan). Original personal skills have
+is read-only; apply retirements only with explicit authorization. Preserve app-owned links. Weekly LaunchAgent `com.cococool.skills-update` runs
+`scripts/update-skills.sh` (report, pinned update, then scan). Original personal skills have
 no upstream and do not auto-update.
 
 The scan includes broken Grok links while preserving working Grok aliases. Shared
-guard source is in `scripts/hooks/`; `~/.cursor/hooks/` links to that source. Run
+guard source is in `scripts/hooks/`. Clients run the installed copies in `~/.agents/hooks/`
+(mode 500, `chflags uchg`); `scripts/sync-hooks.sh` copies them only after
+`hooks/test_guard.py` passes, and the lefthook pre-commit runs the same test. Run
 `python3 -m unittest discover -s scripts -p 'test_*.py'` from this skill's folder
 after changing maintenance or hook behavior. `scripts/grok-wrapper.sh` loads the
 existing MCP environment before starting Grok; it never prints credential values.

@@ -58,6 +58,37 @@ description: "Use when matching C:\\data."
             self.assertEqual(result['skills'], 1)
             self.assertFalse(result['errors'])
 
+    def test_bare_tools_in_third_party_skill_are_errors(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'skills'
+            for name, tools in (('vendor', 'allowed-tools:\n  - Read\n  - Bash\n'), ('scoped', 'allowed-tools: Read, Bash(git status:*)\n'), ('mine', 'allowed-tools: [Write]\n')):
+                (root / name).mkdir(parents=True)
+                (root / name / 'SKILL.md').write_text(f'---\nname: {name}\ndescription: Use when testing.\n{tools}---\n')
+            lock = Path(directory) / 'lock.json'
+            lock.write_text('{"skills": {"vendor": {"source": "someone/x"}, "scoped": {"source": "someone/y"}, "mine": {"source": "cococool13/agent-skills"}}}')
+            problems = audit.bare_tool_grants(root, lock)
+            self.assertEqual(len(problems), 1)
+            self.assertIn('vendor', problems[0])
+            self.assertIn('Bash', problems[0])
+
+    def test_agents_md_size_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'AGENTS.md'
+            path.write_text('x' * 9499)
+            self.assertEqual(audit.agents_md_size(path), [])
+            path.write_text('x' * 9500)
+            self.assertEqual(len(audit.agents_md_size(path)), 1)
+
+    def test_listing_budget_counts_each_name_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = [Path(directory) / 'a', Path(directory) / 'b']
+            for root in roots:
+                (root / 'one').mkdir(parents=True)
+                (root / 'one' / 'SKILL.md').write_text('---\nname: one\ndescription: ' + 'd' * 93 + '\n---\n')
+            self.assertEqual(audit.listing_chars(roots), 100)
+            self.assertEqual(audit.listing_budget(roots, 0.02, 1250)[2], [])
+            self.assertEqual(len(audit.listing_budget(roots, 0.02, 1000)[2]), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,0 +1,8 @@
+{
+  "name": "skills-cli-pinned",
+  "private": true,
+  "description": "Pinned skills CLI for the weekly skills-update LaunchAgent (audit 2026-10-19).",
+  "dependencies": {
+    "skills": "1.7.2"
+  }
+}
