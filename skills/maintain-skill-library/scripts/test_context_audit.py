@@ -79,6 +79,16 @@ description: "Use when matching C:\\data."
             path.write_text('x' * 9500)
             self.assertEqual(len(audit.agents_md_size(path)), 1)
 
+    def test_listing_budget_counts_each_name_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            roots = [Path(directory) / 'a', Path(directory) / 'b']
+            for root in roots:
+                (root / 'one').mkdir(parents=True)
+                (root / 'one' / 'SKILL.md').write_text('---\nname: one\ndescription: ' + 'd' * 93 + '\n---\n')
+            self.assertEqual(audit.listing_chars(roots), 100)
+            self.assertEqual(audit.listing_budget(roots, 0.02, 1250)[2], [])
+            self.assertEqual(len(audit.listing_budget(roots, 0.02, 1000)[2]), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

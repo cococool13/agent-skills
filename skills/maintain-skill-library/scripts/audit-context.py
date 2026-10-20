@@ -90,6 +90,30 @@ def agents_md_size(path: Path) -> list[str]:
     return [f'{path}: {size} characters; keep it under {AGENTS_MD_LIMIT}'] if size >= AGENTS_MD_LIMIT else []
 
 
+def listing_chars(roots: list[Path]) -> int:
+    """Characters of the skill listing a client builds: name + description + 4 per skill, once per name."""
+    seen = {}
+    for root in roots:
+        folders = sorted(root.iterdir()) if root.is_dir() else []
+        for folder in folders:
+            if folder.name.startswith('.'):
+                continue
+            for skill in [folder / 'SKILL.md', *sorted((folder / 'skills').glob('*/SKILL.md'))]:
+                try:
+                    name, description = metadata(skill.read_text())
+                except (ValueError, OSError):
+                    continue
+                seen.setdefault(name, len(name) + len(description) + 4)
+    return sum(seen.values())
+
+
+def listing_budget(roots: list[Path], fraction: float, context_tokens: int) -> tuple[int, int, list[str]]:
+    """Claude Code lists skills within skillListingBudgetFraction of the context (about 4 chars/token)."""
+    used, budget = listing_chars(roots), int(fraction * context_tokens * 4)
+    problem = f'skill listing {used} characters exceeds the budget {budget} ({fraction} of {context_tokens} tokens); descriptions get dropped'
+    return used, budget, [problem] if used > budget else []
+
+
 def audit(root: Path, overlays: Path) -> dict:
     rows, errors, warnings = [], [], []
     for folder in sorted(root.iterdir()) if root.is_dir() else []:
@@ -145,16 +169,25 @@ def main() -> int:
     parser.add_argument('--agents-md', type=Path, default=Path.home() / '.agents/AGENTS.md')
     parser.add_argument('--json', action='store_true')
     parser.add_argument('--rules', type=Path, action='append', help='Rule roots; defaults to this user’s Cursor and Claude rules')
+    parser.add_argument('--listing-root', type=Path, action='append',
+                        help='Skill folders one client lists; defaults to ~/.claude/skills')
+    parser.add_argument('--listing-fraction', type=float, default=0.02, help='skillListingBudgetFraction')
+    parser.add_argument('--context-tokens', type=int, default=200000, help='Smallest context window in use')
     args = parser.parse_args()
     result = audit(args.root, args.overlays)
     rules = args.rules if args.rules is not None else [Path.home() / '.cursor/rules', Path.home() / '.claude/rules']
     result['errors'].extend(retired_skill_references(args.root, rules))
     result['errors'].extend(bare_tool_grants(args.root, args.lock))
     result['errors'].extend(agents_md_size(args.agents_md))
+    listing_roots = args.listing_root or [Path.home() / '.claude/skills']
+    used, budget, problems = listing_budget(listing_roots, args.listing_fraction, args.context_tokens)
+    result['listing'] = {'characters': used, 'budget': budget}
+    result['errors'].extend(problems)
     if args.json:
         print(json.dumps(result, indent=2))
     else:
         print(f"Context audit: {result['skills']} top-level skills; {result['description_characters']} description characters")
+        print(f"Skill listing: {used} of {budget} characters")
         for item in result['errors']:
             print('ERROR: ' + item)
         for item in result['warnings']:

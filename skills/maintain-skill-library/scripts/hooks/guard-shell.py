@@ -63,8 +63,11 @@ ASK = [
     r"\bmkfs\b",
     r"\bdd\s+if=",
     r"\bvercel\b",
-    r"\bnetlify\s+deploy\b",
-    r"\bfirebase\s+deploy\b",
+    r"\bnetlify\b",
+    r"\bfirebase\s+(deploy|hosting)",
+    # Remote code run straight from the network.
+    r"\b(curl|wget)\b[^\n;&]*\|\s*(sudo\s+)?(sh|bash|zsh|dash|python3?)\b",
+    r"\b(sh|bash|zsh|dash)\b[^\n;&|]*(<\(|\$\(|`)\s*(curl|wget)\b",
     r"\bcargo\s+publish\b",
     r"\btwine\s+upload\b",
     r"\basc\.py\b.*(--yes|review-send|submit)",
@@ -107,6 +110,7 @@ R_FORCE = "Force-push is blocked. Push a new branch or ask Cohen."
 R_RM = "Recursive delete is allowed only inside the working directory, ~/Projects/<repo> build dirs, or temp dirs."
 R_RM_ASK = "Recursive delete with an unresolved target. Wait for Cohen's approval."
 R_ASK = "Deploy, release, publish, submit, merge, remote write, or destructive git. State the exact target and wait for Cohen's approval."
+R_FETCH = "Unpinned package download (npx/bunx/dlx without @version). Pin a version or wait for Cohen's approval."
 
 
 class Verdict:
@@ -775,6 +779,45 @@ def _ask_command(name, argv0, args) -> bool:
     return False
 
 
+def _unpinned_fetch(argv, cwd) -> bool:
+    """npx/bunx/pnpm dlx/yarn dlx of a package with no @version that would be downloaded."""
+    i = 0
+    while i < len(argv) and (re.match(r"^[A-Za-z_]\w*=", argv[i]) or _name(argv[i]) in PREFIX):
+        i += 1
+    if i >= len(argv):
+        return False
+    b = _name(argv[i])
+    if b in ("npx", "bunx", "pnpx"):
+        rest, always = argv[i + 1:], b == "pnpx"
+    elif b in ("pnpm", "yarn", "npm", "bun") and argv[i + 1:i + 2] and argv[i + 1] in ("dlx", "exec", "x"):
+        rest, always = argv[i + 2:], argv[i + 1] == "dlx"
+    else:
+        return False
+    yes, pkg, j = False, None, 0
+    while j < len(rest) and rest[j].startswith("-"):
+        f = rest[j]
+        yes |= f in ("-y", "--yes")
+        if f in ("-p", "--package") and j + 1 < len(rest):
+            pkg = rest[j + 1]
+            j += 1
+        elif f.startswith("--package="):
+            pkg = f.split("=", 1)[1]
+        j += 1
+    if pkg is None:
+        if j >= len(rest):
+            return False
+        pkg = rest[j]
+    if re.match(r"^(@[^/@\s]+/)?[^@\s]+@\S+$", pkg) or pkg.startswith((".", "/", "~")):
+        return False  # pinned, or a local path
+    if yes or always:
+        return True
+    if not cwd:
+        return False
+    import shutil
+    bin_name = pkg.rsplit("/", 1)[-1]
+    return not (os.path.exists(os.path.join(cwd, "node_modules", ".bin", bin_name)) or shutil.which(bin_name))
+
+
 def _nested(name, args):
     """Command strings run by a wrapper: bash -c STR, eval STR, ssh host CMD, watch CMD."""
     if name in SHELLS:
@@ -821,6 +864,8 @@ def analyze(text: str, cwd, depth=0, in_subst=False) -> Verdict:
                 v.add("deny", R_SECRET)
             continue
         argv0, name, args = argv[0], _name(argv[0]), argv[1:]
+        if _unpinned_fetch(seg["argv"], cwd):
+            v.add("ask", R_FETCH)
         if name in ("cd", "pushd"):
             if not in_subst:
                 cwd = _cd(args, cwd)
@@ -872,12 +917,54 @@ def decide(cmd: str, cwd: str = ""):
     return v.decision, v.reason
 
 
+PATCH_PATH = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): *(.+?) *$", re.M)
+JS_COMMAND = re.compile(
+    r"(?:\b(?:execSync|execFileSync|spawnSync|exec|execFile|spawn)\s*\(\s*|\bcmd\s*:\s*)"
+    r"([\"'`])((?:\\.|(?!\1)[^\\])*)\1", re.S)
+
+
+def decide_patch(patch: str, cwd: str = ""):
+    """apply_patch (Codex) or Edit/Write: deny a patch that touches a secret path."""
+    if any(SECRET_RE.search(p) for p in PATCH_PATH.findall(patch)):
+        return "deny", R_SECRET
+    return "allow", ""
+
+
+def decide_code(code: str, cwd: str = ""):
+    """Codex js (node REPL) code: deny secret mentions; judge shell commands it runs."""
+    if SECRET_RE.search(code):
+        return "deny", R_SECRET
+    v = Verdict()
+    for _, cmd in JS_COMMAND.findall(code):
+        v.add(*decide(cmd.encode().decode("unicode_escape", "ignore"), cwd))
+    return v.decision, v.reason
+
+
+def route(data: dict):
+    tool = str(data.get("tool_name") or data.get("toolName") or "")
+    ti = data.get("toolInput") or data.get("tool_input") or {}
+    if not isinstance(ti, dict):
+        ti = {}
+    cwd = str(data.get("cwd") or "")
+    if tool in ("apply_patch", "Edit", "Write", "MultiEdit"):
+        text = ti.get("command") or ti.get("patch") or ti.get("input") or data.get("input") or ""
+        if isinstance(text, list):
+            text = "\n".join(map(str, text))
+        paths = " ".join(str(ti.get(k) or "") for k in ("file_path", "path"))
+        if paths.strip() and SECRET_RE.search(paths):
+            return "deny", R_SECRET
+        return decide_patch(str(text), cwd)
+    if tool in ("js", "node_repl", "js_repl") or ("code" in ti and not _command(data)):
+        return decide_code(str(ti.get("code") or ""), cwd)
+    return decide(_command(data), cwd)
+
+
 def main() -> None:
     try:
         data = json.load(sys.stdin)
         if not isinstance(data, dict):
             raise ValueError("hook input is not an object")
-        decision, reason = decide(_command(data), str(data.get("cwd") or ""))
+        decision, reason = route(data)
     except Exception as exc:  # fail closed
         sys.stderr.write("guard-shell: blocked, hook error: %s\n" % exc.__class__.__name__)
         sys.exit(2)
