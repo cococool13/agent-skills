@@ -19,10 +19,10 @@ HOME = Path.home()
 CANON = HOME / ".agents/skills"
 HOST_BUILTINS = HOME / ".cursor/skills-cursor"
 PONYTAIL = HOME / ".grok/installed-plugins"
-# Unused plugin extras (2026-10-14 audit); Grok keeps them.
+# Unused plugin extras (2026-10-14 audit).
 PONYTAIL_SKIP = {"ponytail-audit", "ponytail-debt", "ponytail-gain", "ponytail-help"}
 # Claude-only skips (2026-10-15 audit): built-ins cover these; asc-* are linked per App Store project.
-CLAUDE_SKIP = {"code-review", "find-skills", "canvas", "ponytail-review"}
+CLAUDE_SKIP = {"code-review", "find-skills", "canvas"}
 CLAUDE_SKIP_PREFIXES = ("asc-",)
 # Claude-only entries from ~/.agents/skill-overlays (B4-7): ego-browser defers to the built-in browser pane.
 CLAUDE_OVERRIDES = {"ego-browser": HOME / ".agents/skill-overlays/ego-browser/claude"}
