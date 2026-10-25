@@ -17,9 +17,12 @@ Skip this phase when the build has no existing product to learn from.
 
 ## 2. Pick design references
 
-- Call Stacks `suggest_for_task` once, then `search_design` as needed.
-- Use `refero-design` for real app screens and flows.
-- Then `web-designer` (web) or `app-designer` (iOS) sets the visual direction.
+Read `~/.agents/design-refs/DESIGN-PREFS.md`, section "Tools, skills, and when", and follow it. The floor and the chosen mood win over a skill default.
+
+- Pick the mood, then call Stacks `suggest_for_task` once, `get_board_for_project` when a board exists, then `suggest_pack_for_task` and `search_design`.
+- Use `refero-design` for real app screens and flows. Use Inspo when that MCP is connected.
+- One canvas before code: Paper when it is connected. Otherwise use the tool that section names for this deliverable (Stitch, Figma `use_figma`, `tesseract-design`, or `canvas`).
+- Then `hallmark` for a new site or page. `web-designer` for a redesign of an existing site. `app-designer` for iPhone. Hallmark stays off an existing design unless the prompt says `/hallmark redesign`.
 
 ## 3. Build
 

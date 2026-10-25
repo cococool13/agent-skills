@@ -474,19 +474,21 @@ def step(repo: Path, op: dict, info: dict, messages: list[str], cleanup: list[di
     return "worktree cleanup failed; the directories remain" if "failed" in payload["cleanup_result"] else ""
 
 
-def ship(repo: Path | None, apply: bool, messages: list[str], paths: list[str], to: str = "") -> dict:
+def ship(repo: Path | None, apply: bool, messages: list[str], paths: list[str], to: str = "",
+         skip_fetch: bool = False) -> dict:
     payload = dict(mode="apply" if apply else "plan", blockers=[], warnings=[], pending=[], done=[])
     if repo is None:
         payload["blockers"].append("not in a Git repository")
         return payload
     remote = destination(repo, out(repo, "branch", "--show-current"))[0]
-    if remote and remote != "." and run(repo, "fetch", "--quiet", remote, timeout=60, env=NET_ENV).returncode:
+    if (not skip_fetch and remote and remote != "."
+            and run(repo, "fetch", "--quiet", remote, timeout=60, env=NET_ENV).returncode):
         payload["blockers"].append(f"fetch {remote} failed; remote state unknown")
     info = inspect(repo, to)
     ops, blockers, warnings = plan(repo, info, paths, messages, apply)
     cleanup = worktree_plan(repo)
-    if any(item["action"] != "keep" for item in cleanup):
-        ops.append({"op": "cleanup"})
+    # Shipping does not authorize deleting branches, worktrees or leftovers.
+    # Keep candidates visible; cleanup needs a separately reviewed selection.
     repo_info = {k: v for k, v in info.items() if k != "blockers" and (v or k in ("ahead", "behind"))}
     repo_info["buckets"] = {k: cap(v) for k, v in info["buckets"].items() if v}
     payload.update(pending=ops, warnings=warnings, cleanup=cleanup, deploy=deploy_hints(repo), repo=repo_info)
@@ -512,12 +514,19 @@ def current_repo() -> Path | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="scan, commit, integrate, push, verify, clean worktrees")
+    parser.add_argument("--plan-only", action="store_true", help="plan only; this is the default")
+    parser.add_argument("--skip-fetch", action="store_true", help="do not fetch before planning")
+    parser.add_argument("--json", action="store_true", help="print JSON; this is the default")
     parser.add_argument("-m", "--message", action="append", default=[], help="commit message paragraph; repeatable")
     parser.add_argument("--to", default="", help="remote branch to ship onto (default: the upstream)")
     parser.add_argument("paths", nargs="*", help="exact paths to commit (default: the commit bucket)")
     args = parser.parse_args()
+    if args.plan_only and args.apply:
+        print(json.dumps({"mode": "apply", "blockers": ["--plan-only and --apply contradict; run one of them"],
+                          "warnings": [], "pending": [], "done": []}, separators=(",", ":")))
+        return 1
     try:
-        payload = ship(current_repo(), args.apply, args.message, args.paths, args.to)
+        payload = ship(current_repo(), args.apply, args.message, args.paths, args.to, skip_fetch=args.skip_fetch)
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
         print(f"ship stopped ({type(exc).__name__}); inspect Git state and the remote revision before any retry",
               file=sys.stderr)

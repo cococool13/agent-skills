@@ -149,25 +149,16 @@ def sync_cleanup_downloads() -> None:
 
 
 def patch_emil_design_eng_body() -> None:
-    """Strip canned greeting / promo stall that fights AGENTS execute-first."""
+    """Keep existing local guidance; require review of any reintroduced section."""
     skill = AGENTS / "emil-design-eng" / "SKILL.md"
     if not skill.is_file():
         return
     text = skill.read_text()
     if "## Initial Response" not in text:
         return
-    start = text.find("## Initial Response")
-    end = text.find("## The Animation Decision Framework")
-    if start < 0 or end < 0:
-        return
-    replacement = (
-        "You are a design engineer with Emil Kowalski craft sensibility. "
-        "Build interfaces where unseen details compound. Prefer concrete fixes over philosophy.\n\n"
-        "## Review format\n\n"
-        "Review findings go in one `Before | After | Why` markdown table, one row per issue.\n\n"
-    )
-    skill.write_text(text[:start] + replacement + text[end:])
-    log("patched emil-design-eng: removed Initial Response stall")
+    # Heading positions do not prove an approved preimage. Do not erase newly
+    # fetched upstream content; move a reviewed exact hunk into instruction-edits.
+    raise ValueError('emil-design-eng body changed upstream; review an exact instruction override before continuing')
 
 
 def main() -> int:

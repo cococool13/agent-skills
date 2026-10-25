@@ -5,8 +5,8 @@ set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")/hooks" && pwd)"
 DEST="${HOME}/.agents/hooks"
-FILES=(guard-shell.py deny-env-read.py session-budget.py lint-dirty.py test_guard.py)
-LOCKED=(guard-shell.py deny-env-read.py)
+FILES=(guard-shell.py deny-env-read.py approve-once.py session-budget.py lint-dirty.py test_guard.py)
+LOCKED=(guard-shell.py deny-env-read.py approve-once.py)
 
 /usr/bin/python3 "$SRC/test_guard.py" "$SRC"
 /usr/bin/python3 "$SRC/session-budget.py" --selftest

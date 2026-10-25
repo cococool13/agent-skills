@@ -2,13 +2,17 @@
 name: ship
 description: "Use when Cohen runs /ship or asks to commit, push, and deploy the current repo only."
 disable-model-invocation: true
+user-invocable: true
+argument-hint: "[note]"
+metadata:
+  short-description: "Commit, push, and deploy this repo"
 ---
 
 # Ship
 
-`/ship` authorizes commit, push, deploy, and live checks for the active project. Run the full flow without check-ins. Stop only for a blocker you cannot fix or a step the project `AGENTS.md` marks owner-only. Project release scripts may upload to TestFlight and notarize; never submit for App Review without Cohen's explicit yes. A request to edit this skill is not permission to ship.
+`/ship` and `$ship` authorize commit, push, deploy, and live checks for the active project on Cursor, Claude Code, Codex, and Grok. Run the full flow without check-ins. Stop only for a blocker you cannot fix or a step the project `AGENTS.md` marks owner-only. Project release scripts may upload to TestFlight and notarize; never submit for App Review without Cohen's explicit yes. A request to edit this skill is not permission to ship.
 
-Work in the current Git repository only. If there is none, stop and name the missing project.
+Work in the current Git repository only. If there is none, stop and name the missing project. Use the helper for every commit and push. If Cohen adds words after the command, use them as the commit summary.
 
 ## 1. Plan and check
 
@@ -23,11 +27,13 @@ Plan mode fetches, changes nothing, and prints one JSON line. Exit `0` nothing t
 - `repo.buckets.commit`: changed files. Commit only this task's files; name them as paths when others are present. `secret`, `noise`, and `archive` never commit.
 - `repo.unpushed` / `repo.ahead`: every commit the push sends. Stop if one is not part of this task.
 - `blockers`: fix each and plan again. `warnings`: carry into the report.
-- `pending`: what Apply will do (`commit`, `integrate`, `push`, `cleanup`).
+- `pending`: what Apply will do (`commit`, `integrate`, `push`). `cleanup` lists candidates for a separate review; it never runs during shipping.
 - `deploy`: CI workflows, deploy scripts, and Wrangler configs found in the repo.
 - Session or feature branch (`repo.branch` is not `repo.default_branch`): if the project deploys from the default branch and does not require PRs, add `--to <default_branch>` to Apply. Otherwise push the branch.
 
 Run the project's build, tests, and lint/format on the final code and fix each failure.
+
+**Web launches.** When this push launches a site or page, or changes signup, checkout, or pricing, read `~/.agents/skills/launch-qa-five-personas/SKILL.md` and run it on the preview URL (the live URL only when the project has no preview). Any blocker stops the ship: fix it, redeploy the preview, and rerun until the verdict is PASS. Put the report path and verdict in the final report.
 
 ## 2. Apply
 
@@ -35,7 +41,7 @@ Run the project's build, tests, and lint/format on the final code and fix each f
 python3 ~/.agents/skills/ship/scripts/ship.py --apply -m "<type>: <imperative summary>" -m "<trailers>" [--to <branch>] [path ...]
 ```
 
-Each `-m` is one paragraph; trailers go last. With no paths, the whole `commit` bucket is committed. Apply re-fetches, then: stages, scans the staged diff and unpushed commits with gitleaks (verdict only), commits, rebases onto the remote branch if behind, pushes `HEAD` (never forced), confirms the remote SHA (`verified`), and removes old worktrees (clean, merged, untouched for 72 hours; leftover folders go to Trash).
+Each `-m` is one paragraph; trailers go last. With no paths, the whole `commit` bucket is committed. Apply re-fetches, then: stages, scans the staged diff and unpushed commits with gitleaks (verdict only), commits, rebases onto the remote branch if behind, pushes `HEAD` (never forced), confirms the remote SHA (`verified`), and leaves all worktrees, branches and leftover folders in place. Cleanup requires a separate request naming the approved items.
 
 - `revalidate` (exit `2`): upstream commits were rebased in. Re-run the checks, then run Apply again with no `-m` and no paths (plus the same `--to`). Without `-m` and paths, Apply never commits; it only pushes.
 - Rebase conflict: Apply aborts the rebase and the commit stays local. Resolve it, re-run checks, apply again.
@@ -45,12 +51,12 @@ Each `-m` is one paragraph; trailers go last. With no paths, the whole `commit` 
 
 ## 3. Deploy
 
-- CI deploys the pushed branch (see `deploy.ci`): do not also deploy by hand. Find the run with `gh run list --commit <sha> --json databaseId,status,workflowName`, then run `gh run watch <id> --exit-status` in the background. A queued run is not shipped.
-- Manual deploy: use the project's release script (`deploy.scripts`) and the `deploy-cloudflare` skill; keep each named Worker environment. A manual deploy uploads the working tree, not the commit: stop if `left` lists files inside the deploy inputs. Build, scan the output with `gitleaks dir <output> --redact --no-banner`, then deploy once.
+- If `deploy.ci` lists a workflow that runs on this push, wait for that run and do not deploy by hand. Find it with `gh run list --commit <sha> --json databaseId,status,workflowName`, then run `gh run watch <id> --exit-status` in the background. A queued run is not shipped.
+- Otherwise deploy with the project script (`deploy.scripts`). Read `~/.agents/skills/deploy-cloudflare/SKILL.md` and follow it. Keep each named Worker environment. A manual deploy uploads the working tree, not the commit: stop if `left` lists files inside the deploy inputs. Build, scan the output with `gitleaks dir <output> --redact --no-banner`, then deploy once.
 - No deploy defined: say so. The verified push is the ship.
 
 ## 4. Verify and report
 
-Open the live URL and confirm the change itself, not only an HTTP 200. Use the built-in browser pane in Claude desktop, `ego-browser` in other clients, and Claude in Chrome when the check needs Cohen's logged-in session. If no browser connects, say the browser check did not run and finish the rest.
+Open the live URL and confirm the change itself, not only an HTTP 200. Use the browser routing in `~/.agents/AGENTS.md`. If no browser connects, say the browser check did not run and finish the rest.
 
-Report the project, commit SHA, push destination and `verified`, deploy status and URL, each check and its result, warnings, removed worktrees and Trash moves, and each item not verified. Say "shipped" only when the push is verified and any deploy is confirmed live.
+Report the project, commit SHA, push destination and `verified`, deploy status and URL, each check and its result, warnings, cleanup candidates if relevant, and each item not verified. Say "shipped" only when the push is verified and any deploy is confirmed live.

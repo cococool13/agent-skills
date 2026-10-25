@@ -17,10 +17,14 @@ the product name in another client's instructions does not convert the format.
 | Codex | `~/.codex/hooks.json` | `.codex/hooks.json` |
 | Cursor | `~/.cursor/hooks.json` | `.cursor/hooks.json` |
 | Claude Code | `~/.claude/settings.json` under `hooks` | `.claude/settings.json` under `hooks` |
-| Grok | Inspect its active compatibility settings | Follow the format of the imported host |
+| Grok | `~/.grok/hooks/*.json` | `.grok/hooks/*.json` |
 
-On Cohen's machine, Grok imports Cursor hooks. The shared executable guards live
-under `~/.cursor/hooks/`; each client retains its own configuration adapter.
+On Cohen's machine the shared guards are `~/.agents/hooks/deny-env-read.py` and
+`guard-shell.py`. `~/.cursor/hooks/` links to them. Grok does not import Cursor
+or Claude hooks (`[compat.cursor] hooks` and `[compat.claude] hooks` are false).
+Cursor's reply format does not block in Grok, so do not turn those switches on.
+Grok runs `~/.grok/hooks/safety.json` against the same scripts. Each other
+client keeps its own configuration adapter.
 
 ### Codex
 

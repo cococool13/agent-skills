@@ -77,6 +77,24 @@ class OverlaySafetyTests(unittest.TestCase):
         with patch.object(Path, 'write_text', side_effect=AssertionError('unnecessary write')):
             self.assertFalse(self.overlay._replace_description(skill, 'Use when testing.'))
 
+    def test_body_overlay_refuses_unknown_upstream_without_overwriting(self):
+        skill = self.overlay.AGENTS / 'emil-design-eng/SKILL.md'
+        skill.parent.mkdir()
+        text = '# Guide\n## Initial Response\nNew upstream instructions.\n## The Animation Decision Framework\nKeep.\n'
+        skill.write_text(text)
+        with self.assertRaisesRegex(ValueError, 'exact instruction override'):
+            self.overlay.patch_emil_design_eng_body()
+        self.assertEqual(skill.read_text(), text)
+
+    def test_body_overlay_preserves_already_adapted_skill(self):
+        skill = self.overlay.AGENTS / 'emil-design-eng/SKILL.md'
+        skill.parent.mkdir()
+        text = '# Guide\n## Review format\nLocal adaptation.\n'
+        skill.write_text(text)
+        with patch.object(Path, 'write_text', side_effect=AssertionError('unnecessary write')):
+            self.overlay.patch_emil_design_eng_body()
+        self.assertEqual(skill.read_text(), text)
+
 
 class RetirementTests(unittest.TestCase):
     def setUp(self):

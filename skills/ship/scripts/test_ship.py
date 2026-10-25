@@ -165,6 +165,24 @@ class ShipTests(GitFixture):
         self.assertEqual(self.git('rev-list', '--count', 'HEAD'), '1')
         self.assertEqual(self.git('diff', '--cached', '--name-only'), '')
 
+    def test_plan_only_and_skip_fetch_do_not_change_the_tree(self):
+        (self.repo / 'a.txt').write_text('two\n')
+        self.git('remote', 'add', 'origin', str(self.root / 'missing.git'))
+        code, payload, scanner = self.main('--plan-only', '--skip-fetch', '--json', '-m', 'x')
+        self.assertEqual(code, 2, payload)
+        self.assertFalse(any('fetch' in b for b in payload['blockers']))
+        scanner.assert_not_called()
+        self.assertEqual(self.git('rev-list', '--count', 'HEAD'), '1')
+        self.assertEqual(self.git('status', '--porcelain'), 'M a.txt')
+
+    def test_plan_only_with_apply_stops(self):
+        (self.repo / 'a.txt').write_text('two\n')
+        code, payload, scanner = self.main('--plan-only', '--apply', '-m', 'x')
+        self.assertEqual(code, 1, payload)
+        self.assertIn('contradict', payload['blockers'][0])
+        scanner.assert_not_called()
+        self.assertEqual(self.git('rev-list', '--count', 'HEAD'), '1')
+
     def test_failed_fetch_blocks_scan_and_apply(self):
         (self.repo / 'a.txt').write_text('two\n')
         self.git('remote', 'add', 'origin', str(self.root / 'missing.git'))
@@ -374,20 +392,20 @@ class ShipTests(GitFixture):
         other = self.root / 'old-tree'
         self.git('worktree', 'add', '-b', 'old', str(other))
         code, payload, _ = self.main()
-        self.assertEqual(code, 2, payload)
+        self.assertEqual(code, 0, payload)
         self.assertTrue(other.exists())
-        self.assertEqual(payload['pending'][-1]['op'], 'cleanup')
+        self.assertNotIn('cleanup', [op['op'] for op in payload['pending']])
+        self.assertEqual(payload['cleanup'][0]['action'], 'remove')
 
-    def test_apply_removes_an_old_worktree_and_its_merged_branch(self):
+    def test_apply_preserves_old_worktree_and_merged_branch(self):
         other = self.root / 'old-tree'
         self.git('worktree', 'add', '-b', 'old', str(other))
         code, payload, scanner = self.main('--apply')
         self.assertEqual(code, 0, payload)
         scanner.assert_not_called()
-        self.assertFalse(other.exists())
-        removed = {str(Path(path).resolve()) for path in payload['cleanup_result']['removed']}
-        self.assertIn(str(other.resolve()), removed)
-        self.assertEqual(self.git('branch', '--list', 'old'), '')
+        self.assertTrue(other.exists())
+        self.assertNotIn('cleanup_result', payload)
+        self.assertIn('old', self.git('branch', '--list', 'old'))
 
     def test_dirty_or_unique_worktree_stays(self):
         dirty = self.root / 'dirty-tree'
@@ -436,15 +454,16 @@ class ShipTests(GitFixture):
         self.assertTrue(other.exists())
         self.assertEqual(payload['cleanup'][0]['reason'], 'recent')
 
-    def test_missing_worktree_is_pruned(self):
+    def test_missing_worktree_is_reported_without_pruning(self):
         other = self.root / 'old-tree'
         self.git('worktree', 'add', '-b', 'old', str(other))
         shutil.rmtree(other)
         code, payload, _ = self.main('--apply')
         self.assertEqual(code, 0, payload)
-        self.assertNotIn('old-tree', self.git('worktree', 'list'))
+        self.assertIn('old-tree', self.git('worktree', 'list'))
+        self.assertNotIn('cleanup_result', payload)
 
-    def test_leftover_directory_moves_to_trash(self):
+    def test_leftover_directory_stays_until_separately_authorized(self):
         leftover = self.repo / '.worktrees' / 'stale'
         leftover.mkdir(parents=True)
         (leftover / 'note.txt').write_text('old\n')
@@ -452,9 +471,10 @@ class ShipTests(GitFixture):
         with patch.object(ship, 'TRASH', trash):
             code, payload, _ = self.main('--apply')
         self.assertEqual(code, 0, payload)
-        self.assertFalse(leftover.exists())
-        self.assertFalse((self.repo / '.worktrees').exists())
-        self.assertTrue(any(trash.rglob('note.txt')))
+        self.assertTrue(leftover.exists())
+        self.assertEqual((leftover / 'note.txt').read_text(), 'old\n')
+        self.assertFalse(trash.exists())
+        self.assertNotIn('cleanup_result', payload)
 
 
 class ScanTests(unittest.TestCase):
