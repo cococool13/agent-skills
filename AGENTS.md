@@ -9,6 +9,7 @@ npx skills add cococool13/agent-skills --all -g -y
 python3 skills/maintain-skill-library/scripts/post-update-patches.py
 python3 -m unittest discover -s skills/ship/scripts -p 'test_*.py'
 python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_*.py'
+python3 skills/repo-upgrade/scripts/preflight.py --selftest && python3 skills/repo-upgrade/scripts/scan.py --selftest
 ```
 
 ## Structure

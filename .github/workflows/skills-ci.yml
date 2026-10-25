@@ -19,3 +19,5 @@ jobs:
         run: python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_context_audit.py'
       - name: Guard contract tests
         run: /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/test_guard.py
+      - name: repo-upgrade script self-tests
+        run: python3 skills/repo-upgrade/scripts/preflight.py --selftest && python3 skills/repo-upgrade/scripts/scan.py --selftest
