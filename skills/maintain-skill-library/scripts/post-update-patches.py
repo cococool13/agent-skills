@@ -16,10 +16,7 @@ MAINTENANCE_SOURCE = HOME / "Projects/Agent Skills/skills/maintain-skill-library
 LOG: list[str] = []
 
 # Nested skill path map for description overlays named parent__child.txt
-NESTED_SKILL_PATHS = {
-    "letsfg__flight-search": AGENTS / "letsfg" / "skills" / "flight-search" / "SKILL.md",
-    "letsfg__hotel-search": AGENTS / "letsfg" / "skills" / "hotel-search" / "SKILL.md",
-}
+NESTED_SKILL_PATHS: dict[str, Path] = {}
 
 
 def log(msg: str) -> None:
