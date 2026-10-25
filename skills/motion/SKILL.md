@@ -6,15 +6,17 @@ description: "Use when implementing, auditing, reviewing, or debugging UI motion
 
 # Motion
 
-Router for animation work. Read only the route you need.
+Source-only router for animation work. The active installed `motion` package
+owns Motion/CSS implementation; do not install this router over it. Shared
+routes below resolve in the canonical library, rather than this source tree.
+Read only the route needed for the task.
 
 | Intent | Read |
 | --- | --- |
-| Implement a new animation | `../emil-design-eng/SKILL.md` (motion rules), then `../review-animations/SKILL.md` to check it |
-| Audit motion across a codebase (read-only plan) | `../improve-animations/SKILL.md` |
-| Review existing animation code | `../review-animations/SKILL.md` |
-| Scroll / pin / section-transition bugs | `../scroll-motion-debug/SKILL.md` |
-| Apple-style gesture, spring, sheet, material | `../apple-design/SKILL.md` |
-| Emil craft rules that touch motion | `../emil-design-eng/SKILL.md` |
+| Implement a new animation | `~/.agents/skills/motion/SKILL.md` for Motion/CSS; `~/.agents/skills/gsap-core/SKILL.md` for GSAP |
+| Audit or review existing motion | `~/.agents/skills/review-animations/SKILL.md` |
+| GSAP scroll / pin / section-transition bugs | `~/.agents/skills/gsap-scrolltrigger/SKILL.md` |
+| Native gestures, springs, sheets and materials | Project platform/design docs; `~/.agents/skills/app-designer/SKILL.md` for iPhone visual direction |
+| Emil craft rules that touch motion | `~/.agents/skills/emil-design-eng/SKILL.md` |
 
-Prefer this router when choosing what to load for animation work.
+Use the active client's installed skill catalog to select a workflow.

@@ -5,6 +5,8 @@ description: Use when creating or editing a .canvas.tsx artifact or choosing an 
 
 # Canvas routing
 
+When the artifact is a visual design, follow `~/.agents/design-refs/DESIGN-PREFS.md`, section "Tools, skills, and when", for the mood, the floor, and the references. This skill only picks the artifact runtime.
+
 Determine the active client before selecting an artifact format. The presence
 of another client's installed files does not establish runtime support.
 

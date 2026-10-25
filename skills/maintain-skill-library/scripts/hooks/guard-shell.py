@@ -6,16 +6,20 @@ backticks, bash -c, eval), not from the command prefix.
 deny: any mention of a secret path (except ls/test/stat/wc -c/shasum/jq keys/grep -c/
       chmod/cp -p/mv of it), env dumps, Keychain, gh token, live Stripe, force-push,
       rm -r / find -delete / xargs rm outside $PWD, ~/Projects/<repo> build dirs, or temp dirs.
-ask:  deploys, releases, publishes, notarization, merges, curl/gh api writes,
+ask:  deploys, releases, publishes, App Store uploads, merges, remote curl/gh api writes,
       git --no-verify / -n / reset --hard / push --delete, deploy-named scripts.
 Everything else: Claude/Codex get no output (native permissions apply);
 Cursor gets {"permission": "allow"} because its contract needs JSON.
 A parse or runtime error exits 2, which every client treats as a block.
 """
+import hashlib
+from functools import lru_cache
 import json
 import os
 import re
+import runpy
 import sys
+import time
 
 HOME = os.path.expanduser("~")
 PROJECTS = HOME + "/Projects"
@@ -27,7 +31,9 @@ SECRET = (
     r"|(?<=[\w-])(?<!process)(?<!\.meta)\.env" + _NOT_EXAMPLE + r"(\.[\w-]+)*(?=$|[\s'\"`;|&)>:,])"  # mcp.env(.bak)
     r"|mcp_credentials|(?<![\w-])(?<!exclude=)(credentials|auth)\.json|\.netrc\b|\.npmrc\b"
     r"|\.dev\.vars" + _NOT_EXAMPLE + r"(?![\w])"
-    r"|hosts\.yml\b|AuthKey_|\.claude\.json|\.codex/config\.toml|\.cursor/mcp\.json|settings\.json\.bak"
+    r"|hosts\.yml\b|AuthKey_|\.claude\.json|\.claude/settings\.json|\.grok/config\.toml|\.codex/config\.toml|\.cursor/mcp\.json|settings\.json\.bak"
+    r"|\.config/claude-auth/|\.config/secrets/|/home/box/agent-data/"
+    r"|\.zsh(rc|env|profile)\b|\.config/zsh/env\.zsh"
     r"|[\w~*/-]\.(pem|p8|p12|pfx)(?=$|[\s'\"`;|&)>:,])"  # server.pem, AuthKey_X.p8
     r"|[\w~*/-]\.key(?=$|[\s'\"`|&>:])"  # server.key, not obj.key) or obj.key,
     r"|id_rsa|id_ed25519|\.appstoreconnect/)"
@@ -110,7 +116,6 @@ R_FORCE = "Force-push is blocked. Push a new branch or ask Cohen."
 R_RM = "Recursive delete is allowed only inside the working directory, ~/Projects/<repo> build dirs, or temp dirs."
 R_RM_ASK = "Recursive delete with an unresolved target. Wait for Cohen's approval."
 R_ASK = "Deploy, release, publish, submit, merge, remote write, or destructive git. State the exact target and wait for Cohen's approval."
-R_FETCH = "Unpinned package download (npx/bunx/dlx without @version). Pin a version or wait for Cohen's approval."
 
 
 class Verdict:
@@ -539,10 +544,49 @@ def _inspector(name, args) -> bool:
     return False
 
 
-def _secret_verdict(argv0, name, args, redirs, in_subst, pipe_has_runner) -> bool:
+@lru_cache(maxsize=1)
+def _read_guard():
+    # One classifier for native reads and recognized shell file readers.
+    return runpy.run_path(os.path.join(os.path.dirname(__file__), "deny-env-read.py"))
+
+
+def _sensitive_file(token, cwd) -> bool:
+    path = _expand(token, cwd)
+    if path is None:
+        return False
+    guard = _read_guard()
+    return (guard["protected_path"](path, cwd or "") or guard["secret_name"](path)
+            or guard["secret_name"](os.path.realpath(path)))
+
+
+def _path_read_verdict(name, args, cwd) -> bool:
+    readers = {"cat", "head", "tail", "less", "more", "sed", "awk", "gawk",
+               "jq", "yq", "grep", "egrep", "fgrep", "rg", "ag", "ack",
+               "base64", "xxd", "strings", "od", "hexdump", "diff", "cmp"}
+    if name not in readers or _inspector(name, args) or name == "rg" and "--files" in args:
+        return False
+    guard = _read_guard()
+    paths = [p for p in _scan_tokens(name, args) if not p.startswith("-")]
+    for token in paths:
+        if _sensitive_file(token, cwd):
+            return True
+    recursive = name in {"rg", "ag", "ack"} or name in {"grep", "egrep", "fgrep"} and any(
+        a in {"--recursive", "--dereference-recursive"}
+        or a.startswith("-") and not a.startswith("--") and set(a[1:]) & set("rR") for a in args)
+    if recursive:
+        for token in paths or ["."]:
+            path = _expand(token, cwd)
+            if path is None or guard["unsafe_search_scope"](path, cwd or os.getcwd()):
+                return True
+    return False
+
+
+def _secret_verdict(argv0, name, args, redirs, in_subst, pipe_has_runner, cwd="") -> bool:
     for op, target in redirs:
-        if op != "<<" and SECRET_RE.search(target) and op not in (">>", "&>>"):
+        if op != "<<" and op not in (">>", "&>>") and (SECRET_RE.search(target) or _sensitive_file(target, cwd)):
             return True  # read from, or truncate, a secret file
+    if _path_read_verdict(name, args, cwd):
+        return True
     if not (SECRET_RE.search(argv0) or any(SECRET_RE.search(t) for t in _scan_tokens(name, args))):
         return False
     return in_subst or pipe_has_runner or not _inspector(name, args)
@@ -551,6 +595,13 @@ def _secret_verdict(argv0, name, args, redirs, in_subst, pipe_has_runner) -> boo
 # ---------- asks ----------
 
 CURL_VALUE = set("ouHAebcxrmwKECDUYyztQP")
+LOCAL_URL = re.compile(r"^(https?://)?(localhost|127\.0\.0\.1|\[::1\]|[\w.-]+\.localhost)(:\d+)?(/|$)", re.I)
+
+
+def _curl_local(args) -> bool:
+    """Every URL is a local dev server, so a write never leaves the machine."""
+    urls = [a for a in args if "://" in a or LOCAL_URL.match(a)]
+    return bool(urls) and all(LOCAL_URL.match(a) for a in urls)
 
 
 def _curl_writes(args) -> bool:
@@ -606,7 +657,7 @@ def _wrangler_risky(args) -> bool:
     if "secret" in p and any(x in ("put", "bulk", "delete") for x in p):
         return True
     if p[0] in ("r2", "kv") or p[0].startswith(("kv:", "r2:")):
-        return True
+        return "--remote" in args  # Wrangler 4 kv/r2 commands default to local
     return p[0] == "d1" and p[1] in ("execute", "migrations") and "--remote" in args
 
 
@@ -732,7 +783,7 @@ def _script_arg(name, args):
 
 def _ask_command(name, argv0, args) -> bool:
     if name == "curl":
-        return _curl_writes(args)
+        return _curl_writes(args) and not _curl_local(args)
     if name == "wrangler":
         return _wrangler_risky(args)
     if name == "gh":
@@ -764,58 +815,11 @@ def _ask_command(name, argv0, args) -> bool:
         return True  # ./deploy.sh, scripts/release/x.sh
     if SCRIPT_WORD.search(name) and re.search(r"\.(sh|py|js|mjs|cjs|ts|rb|pl)$", name):
         return True
+    # Notarize, staple and export stay local or private; only altool uploads to App Store Connect.
     if name == "xcrun":
         pos = [a for a in args if not a.startswith("-")]
-        tool, sub = (pos + ["", ""])[:2]
-        return (tool == "notarytool" and sub == "submit") or tool == "altool" or (tool == "stapler" and sub == "staple")
-    if name == "notarytool":
-        return "submit" in args
-    if name == "altool":
-        return True
-    if name == "stapler":
-        return "staple" in args
-    if name == "xcodebuild":
-        return "-exportArchive" in args
-    return False
-
-
-def _unpinned_fetch(argv, cwd) -> bool:
-    """npx/bunx/pnpm dlx/yarn dlx of a package with no @version that would be downloaded."""
-    i = 0
-    while i < len(argv) and (re.match(r"^[A-Za-z_]\w*=", argv[i]) or _name(argv[i]) in PREFIX):
-        i += 1
-    if i >= len(argv):
-        return False
-    b = _name(argv[i])
-    if b in ("npx", "bunx", "pnpx"):
-        rest, always = argv[i + 1:], b == "pnpx"
-    elif b in ("pnpm", "yarn", "npm", "bun") and argv[i + 1:i + 2] and argv[i + 1] in ("dlx", "exec", "x"):
-        rest, always = argv[i + 2:], argv[i + 1] == "dlx"
-    else:
-        return False
-    yes, pkg, j = False, None, 0
-    while j < len(rest) and rest[j].startswith("-"):
-        f = rest[j]
-        yes |= f in ("-y", "--yes")
-        if f in ("-p", "--package") and j + 1 < len(rest):
-            pkg = rest[j + 1]
-            j += 1
-        elif f.startswith("--package="):
-            pkg = f.split("=", 1)[1]
-        j += 1
-    if pkg is None:
-        if j >= len(rest):
-            return False
-        pkg = rest[j]
-    if re.match(r"^(@[^/@\s]+/)?[^@\s]+@\S+$", pkg) or pkg.startswith((".", "/", "~")):
-        return False  # pinned, or a local path
-    if yes or always:
-        return True
-    if not cwd:
-        return False
-    import shutil
-    bin_name = pkg.rsplit("/", 1)[-1]
-    return not (os.path.exists(os.path.join(cwd, "node_modules", ".bin", bin_name)) or shutil.which(bin_name))
+        return pos[:1] == ["altool"]
+    return name == "altool"
 
 
 def _nested(name, args):
@@ -864,15 +868,13 @@ def analyze(text: str, cwd, depth=0, in_subst=False) -> Verdict:
                 v.add("deny", R_SECRET)
             continue
         argv0, name, args = argv[0], _name(argv[0]), argv[1:]
-        if _unpinned_fetch(seg["argv"], cwd):
-            v.add("ask", R_FETCH)
         if name in ("cd", "pushd"):
             if not in_subst:
                 cwd = _cd(args, cwd)
             continue
         same_pipe = [j for j, s in enumerate(segs) if s["pipe"] == seg["pipe"] and j != idx]
         runner = any(norm[j][1] or (norm[j][0] and _name(norm[j][0][0]) in RUNNERS) for j in same_pipe)
-        if _secret_verdict(argv0, name, args, seg["redirs"], in_subst, runner):
+        if _secret_verdict(argv0, name, args, seg["redirs"], in_subst, runner, cwd):
             v.add("deny", R_SECRET)
         producer = None
         if xargs and idx > 0 and segs[idx - 1]["pipe"] == seg["pipe"] and norm[idx - 1][0]:
@@ -898,6 +900,34 @@ def _command(data: dict) -> str:
     return str(data.get("command") or tool_input.get("command") or "")
 
 
+def _approval_path(cwd: str, command: str) -> str:
+    key = hashlib.sha256((os.path.realpath(cwd or os.getcwd()) + "\0" + command).encode()).hexdigest()
+    return os.path.join(HOME, ".agents", "hooks", "approvals", key + ".json")
+
+
+def _consume_approval(cwd: str, command: str) -> bool:
+    """Consume a one-use, short-lived approval for this exact command and cwd."""
+    path = _approval_path(cwd, command)
+    claimed = path + ".used-" + str(os.getpid())
+    try:
+        os.rename(path, claimed)
+    except FileNotFoundError:
+        return False
+    try:
+        fd = os.open(claimed, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(fd, "r", encoding="utf-8") as handle:
+            receipt = json.load(handle)
+        expected = hashlib.sha256((os.path.realpath(cwd or os.getcwd()) + "\0" + command).encode()).hexdigest()
+        return receipt.get("command_hash") == expected and receipt.get("expires_at", 0) >= time.time()
+    except (OSError, ValueError, TypeError):
+        return False
+    finally:
+        try:
+            os.unlink(claimed)
+        except FileNotFoundError:
+            pass
+
+
 def decide(cmd: str, cwd: str = ""):
     # Pure literal output is documentation, not a command inside its text.
     # Keep substitutions, redirections, compound commands, and scripts guarded.
@@ -914,6 +944,8 @@ def decide(cmd: str, cwd: str = ""):
     v = analyze(shell, cwd or None)
     if v.decision != "deny" and any(re.search(p, shell, re.I) for p in ASK):
         v.add("ask", R_ASK)
+    if v.decision == "ask" and _consume_approval(cwd, cmd):
+        return "allow", ""
     return v.decision, v.reason
 
 
@@ -940,17 +972,37 @@ def decide_code(code: str, cwd: str = ""):
     return v.decision, v.reason
 
 
+FILE_TOOLS = {
+    "apply_patch", "Edit", "Write", "MultiEdit",
+    "write", "search_replace", "StrReplace",
+}
+PATH_KEYS = ("file_path", "filePath", "path", "file", "target_file")
+R_TRUNCATED = "Tool input was truncated, so the guard cannot see the whole call."
+
+
+def _joined_paths(data, ti) -> str:
+    parts = []
+    for key in PATH_KEYS:
+        for src in (ti, data):
+            value = src.get(key)
+            if value:
+                parts.append(str(value))
+    return " ".join(parts)
+
+
 def route(data: dict):
+    if data.get("toolInputTruncated") is True or data.get("tool_input_truncated") is True:
+        return "deny", R_TRUNCATED
     tool = str(data.get("tool_name") or data.get("toolName") or "")
     ti = data.get("toolInput") or data.get("tool_input") or {}
     if not isinstance(ti, dict):
         ti = {}
     cwd = str(data.get("cwd") or "")
-    if tool in ("apply_patch", "Edit", "Write", "MultiEdit"):
+    if tool in FILE_TOOLS:
         text = ti.get("command") or ti.get("patch") or ti.get("input") or data.get("input") or ""
         if isinstance(text, list):
             text = "\n".join(map(str, text))
-        paths = " ".join(str(ti.get(k) or "") for k in ("file_path", "path"))
+        paths = _joined_paths(data, ti)
         if paths.strip() and SECRET_RE.search(paths):
             return "deny", R_SECRET
         return decide_patch(str(text), cwd)

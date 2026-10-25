@@ -1,0 +1,107 @@
+#!/usr/bin/python3
+"""Block agent reads of secret env/key files. Fail closed: a parse error exits 2 (block)."""
+import json
+import os
+import sys
+
+DENY_NAMES = {
+    ".env",
+    ".env.local",
+    ".env.production",
+    ".env.development",
+    ".env.staging",
+    ".env.test",
+    "credentials.json",
+    "service-account.json",
+    "mcp.env",
+    "mcp_credentials.json",
+    "auth.json",
+    ".netrc",
+    ".npmrc",
+    ".dev.vars",
+}
+ALLOW_NAMES = {".env.example", ".env.sample", ".env.template"}
+DENY_SUFFIXES = (".pem", ".key", ".p12", ".pfx", ".p8")
+DENY_BASENAME_CONTAINS = (".env.",)
+
+
+def _tool_input(data: dict) -> dict:
+    raw = data.get("toolInput") or data.get("tool_input") or {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _path(data: dict) -> str:
+    tool_input = _tool_input(data)
+    for key in ("filePath", "file_path", "path", "file", "target_file"):
+        value = data.get(key) or tool_input.get(key)
+        if value:
+            return str(value)
+    return ""
+
+
+def _emit(payload: dict, structured: bool = False) -> None:
+    decision = payload.get("decision") or payload.get("permission")
+    if structured:
+        output = {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": decision,
+            "permissionDecisionReason": payload.get("reason", ""),
+        }} if decision != "allow" else None
+        if output:
+            print(json.dumps(output))  # allow prints nothing: native permissions apply
+        return
+    payload = {key: value for key, value in payload.items() if key in {"permission", "user_message", "agent_message"}}
+    print(json.dumps(payload))
+
+
+def main() -> None:
+    try:
+        data = json.load(sys.stdin)
+        if not isinstance(data, dict):
+            raise ValueError("hook input is not an object")
+    except Exception as exc:  # fail closed
+        sys.stderr.write("deny-env-read: blocked, hook error: %s\n" % exc.__class__.__name__)
+        sys.exit(2)
+
+    structured = data.get("hook_event_name") == "PreToolUse"
+    if data.get("toolInputTruncated") is True or data.get("tool_input_truncated") is True:
+        reason = "Tool input was truncated, so the guard cannot see the whole path."
+        _emit(
+            {
+                "permission": "deny",
+                "decision": "deny",
+                "reason": reason,
+                "user_message": reason,
+                "agent_message": reason,
+            },
+            structured=structured,
+        )
+        return
+
+    path = _path(data)
+    base = os.path.basename(path)
+    lower = base.lower()
+    deny = lower not in ALLOW_NAMES and (
+        lower in DENY_NAMES
+        or lower.endswith(DENY_SUFFIXES)
+        or any(x in lower for x in DENY_BASENAME_CONTAINS)
+        or lower in {"id_rsa", "id_ed25519"}
+    )
+    if deny:
+        reason = "Do not read secret/credential files. Check key names only, never values."
+        _emit(
+            {
+                "permission": "deny",
+                "decision": "deny",
+                "reason": reason,
+                "user_message": f"Blocked read of secret-like file: {base}",
+                "agent_message": reason,
+            },
+            structured=structured,
+        )
+    else:
+        _emit({"permission": "allow", "decision": "allow"}, structured=structured)
+
+
+if __name__ == "__main__":
+    main()

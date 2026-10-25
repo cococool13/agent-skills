@@ -72,7 +72,9 @@ Ego CLI and runtime skills are app-owned. Preserve their links and use the
 installed TaskSpace/Page API. Local host guidance is maintained in
 `references/ego-browser.md`; the overlay reference links to this source.
 `scripts/ego-health-check.sh` runs the bounded local fixture check without
-restarting the browser or using a public monitoring page. Never reinstall the
+restarting the browser or using a public monitoring page.
+`scripts/ego-start-performance.sh` starts ego lite with the sampling profilers
+off and does nothing when it is already running. Never reinstall the
 retired wrapper or legacy helper patches. Run the maintenance test suite after
 changing this workflow, and run the live health check when validating Ego.
 
@@ -112,6 +114,9 @@ Run `python3 scripts/audit-context.py` for the read-only top-level discovery
 summary and overlay checks. It reports characters, not billed tokens, and
 flags verbose provider descriptions for review without rewriting them. It
 does not inspect credentials, configuration secrets, or session histories.
+It also checks global instruction links/import pointers and reports duplicate
+rule bodies, missing adapters and broken links. This verifies files on disk;
+fresh client sessions are needed to prove runtime loading.
 Keep model-trigger descriptions concise (normally 140–220 characters), with
 distinct branches; keep complete execution guidance in the skill body or
 references. The scheduled updater runs this check after applying overlays.

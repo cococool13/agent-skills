@@ -10,6 +10,44 @@ spec.loader.exec_module(audit)
 
 
 class ContextAuditTests(unittest.TestCase):
+    def test_instruction_adapters_accept_links_and_explicit_imports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            canonical = home / '.agents/AGENTS.md'
+            canonical.parent.mkdir()
+            canonical.write_text('Canonical rules\n')
+            for name in ('codex', 'cursor', 'grok'):
+                entry = home / f'.{name}/AGENTS.md'
+                entry.parent.mkdir()
+                entry.symlink_to(canonical)
+            claude = home / '.claude/CLAUDE.md'
+            claude.parent.mkdir()
+            claude.write_text('@' + str(canonical) + '\n')
+            self.assertEqual(audit.instruction_entrypoints(home, canonical), [])
+            (home / 'AGENTS.md').write_text(canonical.read_text())
+            problems = audit.instruction_entrypoints(home, canonical)
+            self.assertEqual(len(problems), 1)
+            self.assertIn('duplicates canonical', problems[0])
+            (home / 'AGENTS.md').write_text('Read `~/.agents/AGENTS.md`.\n')
+            self.assertEqual(audit.instruction_entrypoints(home, canonical), [])
+
+    def test_instruction_adapters_report_missing_and_misdirected_entries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            canonical = home / '.agents/AGENTS.md'
+            self.assertIn('canonical instructions missing', audit.instruction_entrypoints(home, canonical)[0])
+            canonical.parent.mkdir()
+            canonical.write_text('Canonical rules\n')
+            entry = home / '.codex/AGENTS.md'
+            entry.parent.mkdir()
+            entry.symlink_to(home / 'missing.md')
+            problems = audit.instruction_entrypoints(home, canonical)
+            self.assertEqual(len(problems), 4)
+            self.assertTrue(any('does not resolve' in p for p in problems))
+            entry.unlink()
+            entry.write_text('Stale local instructions\n')
+            self.assertTrue(any('no explicit pointer' in p for p in audit.instruction_entrypoints(home, canonical)))
+
     def test_folded_description_stops_before_next_metadata_field(self):
         text = '---\nname: sample\ndescription: >-\n  Use when reading\n  project data.\nmetadata:\n  note: do not load\n---\nBody is not discovery text.'
         self.assertEqual(audit.metadata(text), ('sample', 'Use when reading project data.'))

@@ -90,6 +90,36 @@ def agents_md_size(path: Path) -> list[str]:
     return [f'{path}: {size} characters; keep it under {AGENTS_MD_LIMIT}'] if size >= AGENTS_MD_LIMIT else []
 
 
+def instruction_entrypoints(home: Path, canonical: Path) -> list[str]:
+    """Check user-owned instruction adapters only; never inspect client configs."""
+    if not canonical.is_file():
+        return [f'{canonical}: canonical instructions missing']
+    problems = []
+    for relative in ('AGENTS.md', '.codex/AGENTS.md', '.cursor/AGENTS.md',
+                     '.grok/AGENTS.md', '.claude/CLAUDE.md'):
+        path = home / relative
+        # The home entrypoint is optional; installed client adapters are not.
+        if not path.exists() and not path.is_symlink() and relative == 'AGENTS.md':
+            continue
+        if path.is_symlink():
+            try:
+                valid = path.resolve() == canonical.resolve() and path.is_file()
+            except (OSError, RuntimeError):
+                valid = False
+            if not valid:
+                problems.append(f'{path}: instruction link does not resolve to canonical guidance')
+            continue
+        if not path.is_file():
+            problems.append(f'{path}: instruction entrypoint missing')
+            continue
+        text = path.read_text()
+        if text == canonical.read_text():
+            problems.append(f'{path}: duplicates canonical rules; use a link or explicit pointer')
+        elif not any(pointer in text for pointer in (str(canonical), '~/.agents/AGENTS.md', '../.agents/AGENTS.md')):
+            problems.append(f'{path}: no explicit pointer to canonical guidance')
+    return problems
+
+
 def listing_chars(roots: list[Path]) -> int:
     """Characters of the skill listing a client builds: name + description + 4 per skill, once per name."""
     seen = {}
@@ -167,6 +197,7 @@ def main() -> int:
     parser.add_argument('--overlays', type=Path, default=Path.home() / '.agents/skill-overlays/descriptions')
     parser.add_argument('--lock', type=Path, default=Path.home() / '.agents/.skill-lock.json')
     parser.add_argument('--agents-md', type=Path, default=Path.home() / '.agents/AGENTS.md')
+    parser.add_argument('--home', type=Path, default=Path.home(), help='Home whose instruction adapters to check')
     parser.add_argument('--json', action='store_true')
     parser.add_argument('--rules', type=Path, action='append', help='Rule roots; defaults to this user’s Cursor and Claude rules')
     parser.add_argument('--listing-root', type=Path, action='append',
@@ -179,6 +210,7 @@ def main() -> int:
     result['errors'].extend(retired_skill_references(args.root, rules))
     result['errors'].extend(bare_tool_grants(args.root, args.lock))
     result['errors'].extend(agents_md_size(args.agents_md))
+    result['errors'].extend(instruction_entrypoints(args.home, args.agents_md))
     listing_roots = args.listing_root or [Path.home() / '.claude/skills']
     used, budget, problems = listing_budget(listing_roots, args.listing_fraction, args.context_tokens)
     result['listing'] = {'characters': used, 'budget': budget}
