@@ -32,6 +32,7 @@ Update later: `npx skills update -g <name>` after reviewing the change
 | UI that doesn’t look made up | “Use Refero and design this screen” | [`refero-design`](skills/refero-design/SKILL.md) |
 | A landing page | “Design a landing page for …” | [`landing-page-design`](skills/landing-page-design/SKILL.md) |
 | Less “AI-looking” polish | “Do a de-AI production pass” | [`de-ai-production-pass`](skills/de-ai-production-pass/SKILL.md) |
+| A whole-repo audit and cleanup PR | “Run repo-upgrade on this repo” | [`repo-upgrade`](skills/repo-upgrade/SKILL.md) |
 | To put it live | “Ship this to Cloudflare” | [`ship`](skills/ship/SKILL.md) · [`deploy-cloudflare`](skills/deploy-cloudflare/SKILL.md) |
 
 You usually don’t type the skill name. Just describe the job.
@@ -62,6 +63,7 @@ You usually don’t type the skill name. Just describe the job.
 - [`test-coverage`](skills/test-coverage/SKILL.md) — Design tests or improve coverage (Python and JS/TS)
 - [`prompt-audit`](skills/prompt-audit/SKILL.md) — Clean up dated agent prompts and rules
 - [`optimize`](skills/optimize/SKILL.md) — Make code faster, simpler, or cheaper to run
+- [`repo-upgrade`](skills/repo-upgrade/SKILL.md) — Full repo audit + fix: ponytail, Cloudflare security-audit, scanners, one draft PR
 
 ### Workflow
 
