@@ -13,6 +13,10 @@ riskiest area (money, auth, data writes, highest churn) its own lane.
 
 ## Extra checks (on top of ponytail-audit's six groups)
 
+Sharpen ponytail-audit's groups with: DST and Unicode surrogate edges,
+state checked before an `await` that can change it, and sequential awaits
+inside a lock or request where the I/O is independent.
+
 7. **Repo hygiene:** tracked build output, duplicate binaries (prove with
    sha256), tracked files that match `.gitignore` (from `facts.md`), broken
    relative doc links, docs that contradict code, lockfile drift.
