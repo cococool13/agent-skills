@@ -2,7 +2,7 @@
 
 ## Scanners (`scripts/scan.py` runs whichever are installed)
 
-All read-only, 300 s timeout each. JS tools prefer `node_modules/.bin`. Output goes to `<run>/scans/`. Hits are leads: verify each
+All read-only and offline (Go/Cargo network off), 300 s timeout each. Only knip and jscpd may run from the repo's `node_modules/.bin`. Output goes to `<run>/scans/`. Hits are leads: verify each
 against source before it becomes a finding (`verify.md`).
 
 | Stack | Tool | Command scan.py runs | Caveat |
@@ -12,12 +12,12 @@ against source before it becomes a finding (`verify.md`).
 | Python | vulture | `vulture . --min-confidence 80` | frameworks, getattr, dynamic dispatch |
 | Python | deptry | `deptry .` | import name != distribution name needs mapping |
 | Go | deadcode | `deadcode -test ./...` | RTA from main; libraries show little |
-| Go | govulncheck | `govulncheck ./...` | reachability-aware |
-| Rust | cargo-machete | `cargo machete --with-metadata` | slower but fewer renamed-crate false positives |
+| Go | govulncheck | `govulncheck ./...` (`--online` only) | downloads its database; reachability-aware |
+| Rust | cargo-machete | `cargo machete` | renamed crates give false positives (`--with-metadata` fixes it but may touch the network) |
 | Swift | periphery | `periphery scan` (only if `.periphery.yml` exists; it builds) | use `--retain-public` for frameworks |
-| Any | osv-scanner | `osv-scanner scan source -r . --format table` | any vulnerable version, reachable or not; never `fix` |
+| Any | osv-scanner | `osv-scanner scan source -r . --format table` (`--online` only) | sends the dependency list to api.osv.dev; any vulnerable version, reachable or not; never `fix` |
 | Any | gitleaks | `gitleaks git --redact --no-banner .` | feature-frozen upstream (betterleaks is the successor); use `--baseline-path` on re-runs |
-| Any | opengrep / semgrep | `opengrep scan --config .semgrep --text .` (only if `.semgrep/` exists) | Cloudflare found agents rarely call it on their own, so pre-run it |
+| Any | opengrep / semgrep | `opengrep scan --config .semgrep --text .` (only if `.semgrep/` exists; falls back to `semgrep`) | Cloudflare found agents rarely call it on their own, so pre-run it |
 | CI | zizmor | `zizmor --offline --min-confidence=medium .github/workflows` | `--fix` writes files |
 | CI | actionlint | `actionlint` | ignore unknown self-hosted labels |
 | CI | pinact | `pinact run --check --no-api` | `--verify-comment` for tag/SHA mismatch |

@@ -8,6 +8,7 @@ and prints the run folder. Never writes inside the target repo.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -39,7 +40,7 @@ DEEP_ROOTS = [HOME / ".claude/plugins", HOME / ".grok/installed-plugins", Path("
 TOOLCHAINS = ["git", "node", "npm", "pnpm", "yarn", "bun", "deno", "python3", "uv", "go", "cargo",
               "swift", "xcodebuild", "ruby", "java", "dotnet"]
 SCANNERS = ["knip", "jscpd", "vulture", "deptry", "deadcode", "govulncheck", "cargo-machete", "periphery",
-            "osv-scanner", "gitleaks", "betterleaks", "trufflehog", "opengrep", "semgrep", "zizmor",
+            "osv-scanner", "gitleaks", "trufflehog", "opengrep", "semgrep", "zizmor",
             "actionlint", "pinact", "scc", "lizard", "hyperfine"]
 MANIFESTS = {"package.json": "js/ts", "pyproject.toml": "python", "requirements.txt": "python",
              "go.mod": "go", "Cargo.toml": "rust", "Package.swift": "swift", "Gemfile": "ruby",
@@ -54,17 +55,29 @@ def git(repo: Path, *args: str) -> str:
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
+def genuine(skill: Path, name: str) -> bool:
+    """Reject look-alikes: security-audit must ship its validators."""
+    return name != "security-audit" or (skill.parent / "validate-findings.cjs").is_file()
+
+
 def find_skill(name: str, repo: Path) -> str | None:
+    """User-level roots only: a skill file inside the audited repo is never trusted."""
+    repo = repo.resolve()
     extra = [Path(p) for p in os.environ.get("REPO_UPGRADE_SKILL_ROOTS", "").split(":") if p]
     only = os.environ.get("REPO_UPGRADE_ROOTS_ONLY") == "1"
-    flat = extra if only else extra + [repo / ".claude/skills", repo / ".agents/skills"] + [HOME / r for r in FLAT_ROOTS]
+    if name in CORE and not only:
+        r, sha, sub = CORE[name]
+        extra.append(CACHE / f"{r.replace('/', '__')}@{sha[:12]}" / Path(sub).parent)
+    flat = extra if only else extra + [HOME / r for r in FLAT_ROOTS]
     for root in flat:
-        if (root / name / "SKILL.md").is_file():
-            return str((root / name / "SKILL.md").resolve())
+        skill = (root / name / "SKILL.md")
+        if skill.is_file() and genuine(skill, name) and not skill.resolve().is_relative_to(repo):
+            return str(skill.resolve())
     for root in [] if only else DEEP_ROOTS:
         if root.is_dir():
             hits = sorted(root.glob(f"**/{name}/SKILL.md"),
                           key=lambda h: (sum(part.startswith(".") for part in h.relative_to(root).parts), len(h.parts)))
+            hits = [h for h in hits if genuine(h, name) and not h.resolve().is_relative_to(repo)]
             if hits:
                 return str(hits[0].resolve())
     return None
@@ -96,8 +109,8 @@ def gate_commands(repo: Path) -> list[str]:
             scripts = json.loads(pkg.read_text()).get("scripts", {})
         except (ValueError, OSError):
             scripts = {}
-        runner = "pnpm" if (repo / "pnpm-lock.yaml").exists() else "bun" if (repo / "bun.lockb").exists() or (repo / "bun.lock").exists() else "yarn" if (repo / "yarn.lock").exists() else "npm run"
-        cmds += [f"{runner} {s}" for s in scripts if re.fullmatch(r"(test|lint|typecheck|type-check|check|verify|build|gate|ci)(:.*)?", s)]
+        runner = "pnpm" if (repo / "pnpm-lock.yaml").exists() else "bun run" if (repo / "bun.lockb").exists() or (repo / "bun.lock").exists() else "yarn" if (repo / "yarn.lock").exists() else "npm run"
+        cmds += [f"{runner} {s}" for s in scripts if re.fullmatch(r"(test|lint|typecheck|type-check|check|verify|gate|ci)(:.*)?", s)]
     if (repo / "pyproject.toml").is_file() or (repo / "pytest.ini").is_file():
         cmds.append("python3 -m pytest -q")
     if (repo / "go.mod").is_file():
@@ -158,7 +171,11 @@ def run_dir(repo: Path, out: str | None, remote: str) -> Path:
     if out:
         d = Path(out).expanduser()
     else:
-        name = re.sub(r"\.git$", "", remote.rstrip("/").split("/")[-1].split(":")[-1]) or repo.name
+        parts = re.sub(r"\.git$", "", remote.rstrip("/")).replace(":", "/").split("/")
+        if remote and len(parts) >= 2:
+            name = f"{parts[-2]}__{parts[-1]}"
+        else:  # no remote: directory name plus a short hash of the absolute path
+            name = f"{repo.name}__{hashlib.sha256(str(repo.resolve()).encode()).hexdigest()[:8]}"
         base = Path(os.environ.get("REPO_UPGRADE_HOME", HOME / ".repo-upgrade")) / name
         n = 1 + max([int(p.name[4:]) for p in base.glob("run-*") if p.name[4:].isdigit()], default=0)
         d = base / f"run-{n}"
@@ -222,7 +239,7 @@ def selftest() -> int:
         t = Path(t)
         repo, home = t / "app", t / "home"
         (repo / "src").mkdir(parents=True)
-        (repo / "package.json").write_text(json.dumps({"scripts": {"test": "x", "lint": "y", "dev": "z"}}))
+        (repo / "package.json").write_text(json.dumps({"scripts": {"test": "x", "lint": "y", "dev": "z", "build": "b"}}))
         (repo / "src/a.js").write_text("1")
         (repo / ".gitignore").write_text("dist/\n")
         (repo / "dist").mkdir()
@@ -241,9 +258,17 @@ def selftest() -> int:
         assert f["gate"] == ["npm run test", "npm run lint"], f["gate"]
         assert f["tracked_ignored"] == ["dist/out.js"], f["tracked_ignored"]
         assert f["companions"]["ponytail-audit"].endswith("ponytail-audit/SKILL.md")
+        evil = repo / ".claude/skills/ponytail-review"
+        evil.mkdir(parents=True)
+        (evil / "SKILL.md").write_text("evil")
+        os.environ["REPO_UPGRADE_SKILL_ROOTS"] = f"{t / 'skills'}:{repo / '.claude/skills'}"
+        assert find_skill("ponytail-review", repo) is None, "trusted a skill inside the target"
+        os.environ["REPO_UPGRADE_SKILL_ROOTS"] = str(t / "skills")
         assert ("src/a.js", 1) in f["churn"] or ("package.json", 1) in f["churn"], f["churn"]
         d1, d2 = run_dir(repo, None, ""), run_dir(repo, None, "")
         assert (d1.name, d2.name) == ("run-1", "run-2"), (d1, d2)
+        assert run_dir(repo, None, "git@github.com:alice/app.git").parent.name == "alice__app"
+        assert run_dir(repo, None, "https://github.com/bob/app").parent.name == "bob__app"
         try:
             run_dir(repo, str(repo / "out"), "")
         except SystemExit:

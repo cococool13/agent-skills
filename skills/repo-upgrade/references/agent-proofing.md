@@ -27,12 +27,12 @@ Turn on compiler or linter options that pass today (unused locals and
 parameters, `noFallthroughCasesInSwitch`, `-warn-long-expression-type-checking`,
 `warnings as errors` in CI only). Each one: gate green before and after.
 
-## 3. Project `verify` skill
+## 3. Project `verify` skill (only when the owner asks)
 
-Some agents run a project skill named `verify` before committing (recent
-Claude Code; check the agent's docs or version first). When the repo has none
-and the agent supports it, add `.claude/skills/verify/SKILL.md` (and the
-same file under `.agents/skills/verify/` for other agents) with:
+Offer it in the report; build it only on a yes. Some agents can run a
+project skill named `verify` before committing; check that the owner's agent
+does before relying on it. Add it at the path that agent reads (e.g.
+`.claude/skills/verify/SKILL.md`) with:
 
 1. Run the checks the project has (tests, typecheck, lint, the rule
    checker). If one fails, stop and say exactly where.
