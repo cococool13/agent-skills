@@ -3,24 +3,30 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
+
+from ship_checks import discover, execute
 
 SECRET_RE = re.compile(
     r"(password|secret|credential|bitwarden|1password|lastpass|keepass|"
     r"recovery.?code|backup.?code|seed.?phrase|mnemonic|id_rsa|id_ed25519|"
-    r"service-account|keychain|\.pem$|\.key$|\.p12$|(?:^|/)\.env(?:$|\.)|(?:^|/)\.envrc$|(?:^|/)\.dev\.vars$)",
+    r"service-account|keychain|(?:^|/)(?:auth|mcp_credentials)\.json$|\.netrc$|\.npmrc$|"
+    r"\.p8$|\.pfx$|\.pem$|\.key$|\.p12$|(?:^|/)\.env(?:$|\.)|(?:^|/)\.envrc$|(?:^|/)\.dev\.vars$)",
     re.I,
 )
 # Committed templates. Real env files stay secret.
 EXAMPLE_ENV_RE = re.compile(r"(?:^|/)\.env(?:\.[^/]+)*\.(?:example|sample|template)$", re.I)
+SOURCE_SUFFIXES = {'.swift', '.py', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.go',
+                   '.rs', '.java', '.kt', '.c', '.h', '.cpp', '.hpp', '.rb', '.sh', '.sql'}
+PROTECTED_LOCATION = re.compile(r'(?:^|/)(?:\.env(?:$|\.)|\.dev\.vars|id_rsa|id_ed25519|\.ssh/|\.config/secrets/)', re.I)
 NOISE_RE = re.compile(
     r"(?:^|/)\.DS_Store$|(?:^|/)Thumbs\.db$|\.pyc$|(?:^|/)__pycache__(?:/|$)|\.log$|"
     r"\.tsbuildinfo$|\.orig$|\.rej$|(?:^|/)\.claude/worktrees/|(?:^|/)\.worktrees/|"
@@ -30,7 +36,6 @@ NOISE_RE = re.compile(
 DEPLOY_RE = re.compile(r"wrangler|cloudflare|deploy", re.I)
 MAX_UNTRACKED = 5 * 1024 * 1024
 OWNED_DIRS = (".claude/worktrees", ".worktrees", "worktrees")
-TRASH = Path.home() / ".Trash"
 # A worktree touched this recently may belong to a live agent session.
 RECENT_SECONDS = 72 * 3600
 LIST_CAP = 20
@@ -88,7 +93,9 @@ def lfs_stored(repo: Path, files: list[str]) -> set[str]:
 
 
 def bucket(path: str, untracked: bool, repo: Path) -> str:
-    if not EXAMPLE_ENV_RE.search(path) and SECRET_RE.search(path):
+    # Credential-related source code is still source; gitleaks scans its contents.
+    code = Path(path).suffix.lower() in SOURCE_SUFFIXES and not PROTECTED_LOCATION.search(path)
+    if not code and not EXAMPLE_ENV_RE.search(path) and SECRET_RE.search(path):
         return "secret"
     if NOISE_RE.search(path):
         return "noise"
@@ -189,7 +196,7 @@ def inspect(repo: Path, to: str = "") -> dict:
     elif base and not to and base != upstream:
         blockers.append(f"{base} exists but is not tracked; pass --to {target} to ship onto it")
     default = out(repo, "symbolic-ref", "--short", f"refs/remotes/{remote}/HEAD").removeprefix(f"{remote}/") if remote else ""
-    return dict(path=str(repo), branch=branch, remote=remote, target=target, base=base, upstream=upstream,
+    return dict(path=str(repo), head=out(repo, 'rev-parse', 'HEAD'), branch=branch, remote=remote, target=target, base=base, upstream=upstream,
                 default_branch=default, ahead=ahead, behind=behind, unpushed=unpushed, staged=staged,
                 buckets=buckets, blockers=list(dict.fromkeys(blockers)))
 
@@ -258,9 +265,13 @@ def plan(repo: Path, info: dict, paths: list[str], messages: list[str], apply: b
         blockers.append(f"not changed: {', '.join(unknown)}")
     if secret := [p for p in paths if p in info["buckets"]["secret"]]:
         blockers.append(f"secret-looking paths: {', '.join(secret)}")
+    if excluded := [p for p in paths if p in info["buckets"]["noise"] or p in info["buckets"]["archive"]]:
+        blockers.append(f"excluded paths: {', '.join(excluded)}")
     # Apply without -m or paths never commits: it pushes what is already committed.
     push_only = apply and not paths and not messages
     files = [] if push_only else list(dict.fromkeys(paths or info["buckets"]["commit"]))
+    if files and set(info['staged']) - set(files):
+        blockers.append('index has staged paths outside the commit set; unstage them or name them')
     if apply and files and not messages:
         blockers.append("commit message required: -m")
     warnings = []
@@ -294,6 +305,29 @@ def plan(repo: Path, info: dict, paths: list[str], messages: list[str], apply: b
         if not info["base"]:
             warnings.append(f"{info['remote']}/{info['target']} does not exist; push publishes it")
     return ops, blockers, warnings
+
+
+def verify_remote(repo: Path, remote: str, target: str) -> dict:
+    """Read remote state once; never retry a push with an uncertain outcome."""
+    result = dict(remote=remote, target=target, local_sha=out(repo, "rev-parse", "HEAD"),
+                  verified=False)
+    if not remote or remote == "." or not target:
+        return {**result, "status": "no_remote"}
+    try:
+        response = run(repo, "ls-remote", "--exit-code", remote, f"refs/heads/{target}",
+                       timeout=60, env=NET_ENV)
+    except (OSError, subprocess.TimeoutExpired):
+        return {**result, "status": "unknown"}
+    if response.returncode == 2:
+        return {**result, "status": "missing"}
+    if response.returncode:
+        return {**result, "status": "unknown"}
+    fields = response.stdout.split()
+    if len(fields) != 2 or fields[1] != f"refs/heads/{target}":
+        return {**result, "status": "unknown"}
+    result.update(remote_sha=fields[0], verified=fields[0] == result['local_sha'])
+    result['status'] = 'matches' if result['verified'] else 'differs'
+    return result
 
 
 def list_worktrees(repo: Path) -> list[dict]:
@@ -385,74 +419,63 @@ def worktree_plan(repo: Path) -> list[dict]:
     return items
 
 
-def trash_dir(src: Path) -> str:
-    root = TRASH / f"ship-worktrees-{datetime.now():%Y%m%d-%H%M%S}"
-    root.mkdir(parents=True, exist_ok=True)
-    dest, n = root / src.name, 1
-    while dest.exists():
-        dest = root / f"{src.name}-{n}"
-        n += 1
-    src.rename(dest)
-    return str(dest)
-
-
-def do_cleanup(repo: Path, items: list[dict]) -> dict:
-    result = {"removed": [], "trashed": [], "branches": [], "failed": []}
-    current = out(repo, "branch", "--show-current")
-    for item in items:
-        action, path = item["action"], Path(item["path"])
-        if action in ("keep", "prune"):
-            continue
-        if action == "remove":
-            cmd = run(repo, "worktree", "remove", str(path))
-            if cmd.returncode == 0 and not path.exists():
-                result["removed"].append(str(path))
-                name = item.get("branch", "").removeprefix("refs/heads/")
-                if name and name != current and run(repo, "branch", "-d", name).returncode == 0:
-                    result["branches"].append(name)
-            else:
-                result["failed"].append({"path": str(path), "reason": "remove-failed"})
-            continue
-        try:
-            result["trashed"].append(trash_dir(path))
-        except OSError:
-            result["failed"].append({"path": str(path), "reason": "trash-failed"})
-    run(repo, "worktree", "prune")
-    remaining = {row["path"] for row in list_worktrees(repo)}
-    for item in items:
-        if item["action"] != "prune":
-            continue
-        if item["path"] in remaining:
-            result["failed"].append({"path": item["path"], "reason": "prune-failed"})
-        else:
-            result["removed"].append(item["path"])
-    for name in OWNED_DIRS:
-        parent = repo / name
-        if parent.is_dir() and not any(parent.iterdir()):
-            try:
-                parent.rmdir()
-            except OSError:
-                pass
-    return {k: v for k, v in result.items() if v}
-
-
 def scanned(repo: Path, remote: str, payload: dict) -> str:
     result = scan(repo, remote)
     payload["scan"] = result["summary"]
     return "" if result["ok"] else result["summary"]
 
 
-def step(repo: Path, op: dict, info: dict, messages: list[str], cleanup: list[dict], payload: dict) -> str:
+def clean_messages(messages: list[str]) -> list[str]:
+    """Remove AI co-author trailers while retaining human attribution."""
+    ai_names = {'claude', 'codex', 'openai codex', 'chatgpt', 'openai', 'anthropic',
+                'github copilot', 'copilot', 'grok', 'gemini', 'cursor', 'aider',
+                'devin', 'windsurf', 'replit agent'}
+    cleaned = []
+    for message in messages:
+        lines = []
+        for line in message.splitlines():
+            trailer = re.match(r'^\s*co-authored?-by\s*:\s*(.*?)\s*(?:<([^>]+)>)?\s*$', line, re.I)
+            if trailer:
+                name, email = trailer.groups()
+                name = re.sub(r'\s+', ' ', name.casefold()).removesuffix(' [bot]')
+                bot_email = re.fullmatch(r'(?:noreply|claude|codex|chatgpt|copilot|grok|gemini|cursor)@(?:anthropic\.com|openai\.com|cursor\.com|x\.ai)', email or '', re.I)
+                if name in ai_names or name.startswith(('claude code', 'claude opus', 'claude sonnet', 'claude haiku')) or bot_email:
+                    continue
+            lines.append(line)
+        text = re.sub(r'\n{3,}', '\n\n', '\n'.join(lines)).strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
+def step(repo: Path, op: dict, info: dict, messages: list[str], payload: dict) -> str:
     """Run one pending op. Return an error, or '' on success."""
     if op["op"] == "commit":
-        if error := stage(repo, op["files"], info["staged"]):
-            return error
-        if error := scanned(repo, info["remote"], payload):
-            if added := [f for f in op["files"] if f not in info["staged"]]:
-                run(repo, "--literal-pathspecs", "reset", "-q", "--", *added)
-            return error
+        messages = clean_messages(messages)
+        if not messages:
+            return 'commit summary required after removing AI attribution'
+        index = Path(out(repo, "rev-parse", "--git-path", "index"))
+        if not index.is_absolute():
+            index = repo / index
+        with tempfile.TemporaryDirectory(prefix="ship-index-") as directory:
+            backup = Path(directory) / "index"
+            if index.exists():
+                shutil.copy2(index, backup)
+            error = stage(repo, op["files"], info["staged"])
+            if not error:
+                error = scanned(repo, info["remote"], payload)
+            if error:
+                if backup.exists():
+                    shutil.copy2(backup, index)
+                else:
+                    index.unlink(missing_ok=True)
+                return error
         if run(repo, "commit", *[a for m in messages for a in ("-m", m)]).returncode:
             return "commit failed; run the project's format and lint checks, then inspect hooks"
+        committed = out(repo, 'log', '-1', '--format=%B')
+        if any(not clean_messages([line]) for line in committed.splitlines()
+               if re.match(r'^\s*co-authored?-by\s*:', line, re.I)):
+            return 'commit hook added AI co-author attribution; correct the hook and local commit before pushing'
         return ""
     if op["op"] == "integrate":
         taken, error = integrate(repo, op["base"])
@@ -460,46 +483,96 @@ def step(repo: Path, op: dict, info: dict, messages: list[str], cleanup: list[di
             payload["revalidate"] = f"took {taken} upstream commit(s) from {op['base']}; re-run checks, then apply again"
         return error
     if op["op"] == "push":
-        if "scan" not in payload and (error := scanned(repo, op["remote"], payload)):
+        # A commit hook can change the committed tree after the staging scan.
+        if error := scanned(repo, op["remote"], payload):
             return error
         push = ["push", *(["-u"] if op["set_upstream"] else []), op["remote"], f"HEAD:refs/heads/{op['target']}"]
-        result = run(repo, *push, timeout=180, env=NET_ENV)
+        try:
+            result = run(repo, *push, timeout=180, env=NET_ENV)
+        except (OSError, subprocess.TimeoutExpired):
+            payload['remote_check'] = verify_remote(repo, op['remote'], op['target'])
+            payload['verified'] = payload['remote_check']['verified']
+            payload['push_outcome'] = 'uncertain'
+            return "push interrupted; read remote_check before any retry (hooks and CI may still be incomplete)"
         # Remote and hook output can contain secrets. Do not echo it.
         if result.returncode:
+            payload['remote_check'] = verify_remote(repo, op['remote'], op['target'])
+            payload['verified'] = payload['remote_check']['verified']
             return f"push failed (exit {result.returncode}); check the remote revision before any retry"
-        remote_sha = run(repo, "ls-remote", op["remote"], f"refs/heads/{op['target']}", timeout=60, env=NET_ENV).stdout.split()
-        payload["verified"] = bool(remote_sha) and remote_sha[0] == out(repo, "rev-parse", "HEAD")
+        payload['remote_check'] = verify_remote(repo, op['remote'], op['target'])
+        payload["verified"] = payload['remote_check']['verified']
         return "" if payload["verified"] else "remote SHA differs from HEAD after push; inspect before any retry"
-    payload["cleanup_result"] = do_cleanup(repo, cleanup)
-    return "worktree cleanup failed; the directories remain" if "failed" in payload["cleanup_result"] else ""
+    return "unknown operation; nothing executed"
 
 
 def ship(repo: Path | None, apply: bool, messages: list[str], paths: list[str], to: str = "",
-         skip_fetch: bool = False) -> dict:
+         skip_fetch: bool = False, checks: list[str] | None = None,
+         check_only: bool = False, check_timeout: int = 900, cleanup_report: bool = False) -> dict:
     payload = dict(mode="apply" if apply else "plan", blockers=[], warnings=[], pending=[], done=[])
     if repo is None:
         payload["blockers"].append("not in a Git repository")
         return payload
+    if apply and skip_fetch:
+        payload['blockers'].append('--skip-fetch is inspection-only; Apply requires fresh remote state')
+        return payload
     remote = destination(repo, out(repo, "branch", "--show-current"))[0]
-    if (not skip_fetch and remote and remote != "."
+    if (not skip_fetch and not check_only and remote and remote != "."
             and run(repo, "fetch", "--quiet", remote, timeout=60, env=NET_ENV).returncode):
         payload["blockers"].append(f"fetch {remote} failed; remote state unknown")
     info = inspect(repo, to)
     ops, blockers, warnings = plan(repo, info, paths, messages, apply)
-    cleanup = worktree_plan(repo)
+    cleanup = worktree_plan(repo) if cleanup_report else []
     # Shipping does not authorize deleting branches, worktrees or leftovers.
     # Keep candidates visible; cleanup needs a separately reviewed selection.
     repo_info = {k: v for k, v in info.items() if k != "blockers" and (v or k in ("ahead", "behind"))}
     repo_info["buckets"] = {k: cap(v) for k, v in info["buckets"].items() if v}
-    payload.update(pending=ops, warnings=warnings, cleanup=cleanup, deploy=deploy_hints(repo), repo=repo_info)
+    payload.update(pending=ops, warnings=warnings, cleanup=cleanup, deploy=deploy_hints(repo), repo=repo_info,
+                   check_candidates=discover(repo))
     payload["blockers"].extend(blockers)
+    if check_only:
+        payload['mode'] = 'check'
+        payload['blockers'] = list(info['blockers'])
+    if apply and ops and payload.get('check_candidates') and not checks:
+        payload['blockers'].append('review check_candidates and pass required commands with --check')
+    push_only_checks = apply and not messages and not paths and bool(checks)
+    if push_only_checks and any(row['xy'] != '??' for row in status(repo)):
+        payload['blockers'].append('push-only checks require a clean tracked tree; preserve local edits and validate committed HEAD')
+    if (apply and ops or check_only) and not payload['blockers'] and checks:
+        checked_head = out(repo, 'rev-parse', 'HEAD')
+        payload['checks'], error = execute(repo, checks, check_timeout)
+        if error:
+            payload['blockers'].append(error)
+        elif (checked_head != out(repo, 'rev-parse', 'HEAD')
+              or info['branch'] != out(repo, 'branch', '--show-current')):
+            payload['blockers'].append('HEAD or branch changed during checks; plan again')
+        # Formatters and generated files can change the commit set.
+        if not payload['blockers']:
+            fresh = inspect(repo, to)
+            if (fresh['remote'], fresh['target']) != (info['remote'], info['target']):
+                payload['blockers'].append('push destination changed during checks; plan again')
+            if push_only_checks and any(row['xy'] != '??' for row in status(repo)):
+                payload['blockers'].append('checks changed tracked files; review and commit them before pushing')
+            info = fresh
+            ops, blockers, warnings = plan(repo, info, paths, messages, apply)
+            payload.update(pending=ops)
+            payload['blockers'].extend(blockers)
+            payload['warnings'].extend(warnings)
+    if check_only:
+        if not checks:
+            payload['blockers'].append('check-only requires at least one --check command')
+        return payload
     if apply and not payload["blockers"]:
         while payload["pending"]:
             op = payload["pending"][0]
-            if error := step(repo, op, info, messages, cleanup, payload):
+            try:
+                error = step(repo, op, info, messages, payload)
+            except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+                payload['interrupted'] = op['op']
+                error = f"{op['op']} interrupted ({type(exc).__name__}); inspect Git state before any retry"
+            if error:
                 payload["blockers"].append(error)
                 break
-            payload["done"].append(dict(payload["pending"].pop(0), sha=out(repo, "rev-parse", "--short", "HEAD")))
+            payload["done"].append(dict(payload["pending"].pop(0), sha=out(repo, "rev-parse", "HEAD")))
             if "revalidate" in payload:
                 break
         payload["left"] = cap([p for row in status(repo) for p in row["paths"]])
@@ -513,7 +586,18 @@ def current_repo() -> Path | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--apply", action="store_true", help="scan, commit, integrate, push, verify, clean worktrees")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--apply", action="store_true", help="scan, commit, integrate, push, verify (never cleanup)")
+    modes.add_argument("--verify-only", action="store_true", help="read remote SHA without fetching, committing or pushing")
+    modes.add_argument("--check-only", action="store_true", help="run --check commands without committing or pushing")
+    modes.add_argument('--status', action='store_true', help='read the saved repository release journal')
+    parser.add_argument('--all', action='store_true', help='consolidate all branches and worktrees, validate main, push and release')
+    parser.add_argument('--resume', action='store_true', help='reconcile and resume the saved repo-wide release')
+    parser.add_argument('--profile', default='', help='reviewed ship.toml in this repository or Git ship state')
+    parser.add_argument('--new-release', action='store_true', help='deliberately release an unchanged completed commit again; never overrides an uncertain run')
+    parser.add_argument("--check", action="append", default=[], help="reviewed check command, no shell; repeatable")
+    parser.add_argument("--check-timeout", type=int, default=900, help="seconds per check (default: 900)")
+    parser.add_argument("--cleanup-report", action="store_true", help="include worktree cleanup candidates; never removes them")
     parser.add_argument("--plan-only", action="store_true", help="plan only; this is the default")
     parser.add_argument("--skip-fetch", action="store_true", help="do not fetch before planning")
     parser.add_argument("--json", action="store_true", help="print JSON; this is the default")
@@ -521,20 +605,44 @@ def main() -> int:
     parser.add_argument("--to", default="", help="remote branch to ship onto (default: the upstream)")
     parser.add_argument("paths", nargs="*", help="exact paths to commit (default: the commit bucket)")
     args = parser.parse_args()
-    if args.plan_only and args.apply:
-        print(json.dumps({"mode": "apply", "blockers": ["--plan-only and --apply contradict; run one of them"],
+    if args.check_timeout < 1:
+        parser.error('--check-timeout must be positive')
+    if args.new_release and (not args.all or not args.apply or args.resume):
+        parser.error('--new-release requires --all --apply and never replays an unfinished run')
+    if args.plan_only and (args.apply or args.check_only or args.verify_only):
+        print(json.dumps({"mode": "apply", "blockers": ["--plan-only and the selected mode contradict; run one of them"],
                           "warnings": [], "pending": [], "done": []}, separators=(",", ":")))
         return 1
     try:
-        payload = ship(current_repo(), args.apply, args.message, args.paths, args.to, skip_fetch=args.skip_fetch)
+        repo = current_repo()
+        if args.all or args.status or args.resume:
+            if args.paths or args.to or args.check or args.check_only or args.verify_only or args.skip_fetch:
+                parser.error('repository mode uses its release profile, not task-scoped flags')
+            from ship_all import repository_release
+            payload = repository_release(repo, apply=args.apply or args.resume, resume=args.resume,
+                                         status_only=args.status, filename=args.profile,
+                                         note='\n\n'.join(args.message or []), new_release=args.new_release)
+        elif args.verify_only:
+            if repo is None:
+                payload = {'mode': 'verify', 'blockers': ['not in a Git repository']}
+            else:
+                remote, target, _ = destination(repo, out(repo, 'branch', '--show-current'), args.to)
+                payload = {'mode': 'verify', **verify_remote(repo, remote, target), 'blockers': []}
+                if not payload['verified']:
+                    payload['blockers'].append('remote does not confirm HEAD; inspect status before any retry')
+        else:
+            payload = ship(repo, args.apply, args.message, args.paths, args.to, skip_fetch=args.skip_fetch,
+                           checks=args.check, check_only=args.check_only, check_timeout=args.check_timeout,
+                           cleanup_report=args.cleanup_report)
     except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
-        print(f"ship stopped ({type(exc).__name__}); inspect Git state and the remote revision before any retry",
-              file=sys.stderr)
+        print(json.dumps({'mode': 'apply' if args.apply else 'plan', 'blockers': [
+            f'ship stopped ({type(exc).__name__}); inspect Git state and remote before any retry'],
+            'warnings': [], 'pending': [], 'done': []}))
         return 1
     print(json.dumps(payload, separators=(",", ":")))
     if payload["blockers"]:
         return 1
-    return 2 if payload["pending"] else 0
+    return 2 if payload.get("pending") and payload['mode'] not in ('check', 'verify') else 0
 
 
 if __name__ == "__main__":
