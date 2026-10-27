@@ -809,6 +809,18 @@ def _ask_command(name, argv0, args) -> bool:
             return True
     if name in INTERPRETERS:
         script = _script_arg(name, args)
+        # Ship's default operation only plans. Keep Apply and unknown arguments
+        # gated; do not exempt other scripts merely because they share a name.
+        if name in ("python", "python3") and args and script == args[0]:
+            plans = {
+                HOME + "/.agents/skills/ship/scripts/ship.py",
+                HOME + "/Projects/Agent Skills/skills/ship/scripts/ship.py",
+            }
+            if (os.path.expanduser(script) in plans
+                    and all(a in ("--plan-only", "--skip-fetch", "--json", "--help", "-h",
+                                  "--verify-only", "--cleanup-report", "--all", "--status")
+                            for a in args[1:])):
+                return False
         if script and SCRIPT_WORD.search(script):
             return True
     if "/" in argv0 and SCRIPT_WORD.search(argv0):
