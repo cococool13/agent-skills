@@ -1,6 +1,6 @@
 interface:
   display_name: "Ship"
-  short_description: "Commit, push, and deploy this repo"
-  default_prompt: "Use $ship to commit, push, and deploy the current repo."
+  short_description: "Unify this repo on main and release autonomously"
+  default_prompt: "Use $ship to collect all repository work, merge its branches and worktrees onto main, validate, push, deploy, publish, and verify without routine check-ins."
 policy:
   allow_implicit_invocation: false

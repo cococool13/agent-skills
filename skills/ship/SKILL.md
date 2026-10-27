@@ -1,62 +1,164 @@
 ---
 name: ship
-description: "Use when Cohen runs /ship or asks to commit, push, and deploy the current repo only."
+description: "Use when Cohen runs /ship or asks to consolidate, commit, merge, push, deploy, and publish the current repository autonomously."
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[note]"
 metadata:
-  short-description: "Commit, push, and deploy this repo"
+  short-description: "Unify this repo on main and release autonomously"
 ---
 
 # Ship
 
-`/ship` and `$ship` authorize commit, push, deploy, and live checks for the active project on Cursor, Claude Code, Codex, and Grok. Run the full flow without check-ins. Stop only for a blocker you cannot fix or a step the project `AGENTS.md` marks owner-only. Project release scripts may upload to TestFlight and notarize; never submit for App Review without Cohen's explicit yes. A request to edit this skill is not permission to ship.
+`/ship` and `$ship` authorize the entire current repository release: collect all
+publishable work, commit it, merge branches and registered worktrees into main,
+validate the combined result, push, deploy, publish, and verify. Existing work
+in this repository is included even when another task created it. Run to
+completion without routine permission questions. Editing this skill alone is
+not a release invocation.
 
-Work in the current Git repository only. If there is none, stop and name the missing project. Use the helper for every commit and push. If Cohen adds words after the command, use them as the commit summary.
+Stay in the active Git repository and its registered worktrees. Do not sweep
+other projects. Preserve history: no forced pushes, history rewrites, discarded
+edits, branch deletion, or worktree deletion. Secrets, ignored local files,
+archives and build noise stay outside commits; report leftovers honestly.
+App Review submission and credential changes still require explicit separate
+authorization. Project owner-only steps remain owner-only.
 
-## 1. Plan and check
+## Release prose
 
-Read the release section of the project `AGENTS.md`, then run:
+Keep every commit message, PR title/body/comment/reply, changelog, release note,
+upload description, and shipping summary short, plain, and factual. State what
+changed and why it matters. Add only relevant checks, a real limitation, or a
+required action. One sentence or a few short bullets usually suffice; follow
+required project templates without filling optional sections with boilerplate.
+
+No praise, hype, emoji, filler, repeated summaries, process narration, long file
+lists, model names, generated-by notices, or AI signatures. Keep SHAs, run IDs,
+and detailed logs in the journal unless a reviewer needs them. Do not post a
+comment just to announce progress; combine related replies and skip duplicates.
+Do not invent claims or remove evidence needed to review the change.
+
+Do not add AI as an author or co-author. Remove AI Co-Authored-By trailers from
+new messages, including inherited templates and tool defaults. Preserve real
+human credit and required legal notices. The helper filters supplied AI
+trailers and blocks a new commit if a hook adds one back. Fix the injecting
+source; never skip hooks or rewrite existing history to clean old attribution.
+
+## Discover and decide autonomously
+
+Read the closest project `AGENTS.md` and its release/check scripts. Then run:
 
 ```bash
-python3 ~/.agents/skills/ship/scripts/ship.py
+python3 ~/.agents/skills/ship/scripts/ship.py --all
 ```
 
-Plan mode fetches, changes nothing, and prints one JSON line. Exit `0` nothing to ship, `1` blocked, `2` work pending.
+This returns the branch/worktree inventory, check candidates and deployment
+hints. It does not commit, merge, push, deploy, or publish. Use `--status` to
+read a prior release journal. Never call the task-scoped Apply flow for a
+normal `/ship`; repo-wide mode includes all local branches, configured-remote
+tracking branches, and dirty registered worktrees. Detached dirty work gets a
+recovery branch. Internal validation worktrees are excluded from collection.
 
-- `repo.buckets.commit`: changed files. Commit only this task's files; name them as paths when others are present. `secret`, `noise`, and `archive` never commit.
-- `repo.unpushed` / `repo.ahead`: every commit the push sends. Stop if one is not part of this task.
-- `blockers`: fix each and plan again. `warnings`: carry into the report.
-- `pending`: what Apply will do (`commit`, `integrate`, `push`). `cleanup` lists candidates for a separate review; it never runs during shipping.
-- `deploy`: CI workflows, deploy scripts, and Wrangler configs found in the repo.
-- Session or feature branch (`repo.branch` is not `repo.default_branch`): if the project deploys from the default branch and does not require PRs, add `--to <default_branch>` to Apply. Otherwise push the branch.
+Resolve the release plan yourself from project evidence. Do not ask Cohen to
+select commands, approve a profile, approve individual merges, or confirm the
+already-authorized push/deploy/publish. If a profile is absent, create the
+smallest reviewed `ship.toml` in this repo or `profile.toml` inside its Git
+`ship/` state directory. Read [references/profile.md](references/profile.md)
+for its schema and provider requirements. Native apps and monorepos use their
+existing scripts and working directories. Never guess a Cloudflare account,
+Worker environment, release artifact, or destination.
 
-Run the project's build, tests, and lint/format on the final code and fix each failure.
+Inspect every included branch tip and any source-specific release instructions.
+Resolve ordinary merge conflicts using the combined intent and tests. No
+arbitrary ours/theirs resolution. If another process changes a source, collect
+and validate the new work; do not overwrite it or kill the process.
 
-**Web launches.** When this push launches a site or page, or changes signup, checkout, or pricing, read `~/.agents/skills/launch-qa-five-personas/SKILL.md` and run it on the preview URL (the live URL only when the project has no preview). Any blocker stops the ship: fix it, redeploy the preview, and rerun until the verdict is PASS. Put the report path and verdict in the final report.
+For a protected main branch or a required PR workflow, autonomously use the
+project's normal PR route and wait for its checks/merge. Do not disable branch
+protections or use an admin bypass. When an external operation has started,
+reconcile its recorded SHA/provider identity before any new operation. A
+rejection is a technical problem to resolve, not a reason to ask for repeated
+release authorization. Stop only for a genuine unresolved conflict, missing
+access, owner-only requirement, or an outcome that cannot be established.
 
-## 2. Apply
+## Run the release
 
 ```bash
-python3 ~/.agents/skills/ship/scripts/ship.py --apply -m "<type>: <imperative summary>" -m "<trailers>" [--to <branch>] [path ...]
+python3 ~/.agents/skills/ship/scripts/ship.py --all --apply
 ```
 
-Each `-m` is one paragraph; trailers go last. With no paths, the whole `commit` bucket is committed. Apply re-fetches, then: stages, scans the staged diff and unpushed commits with gitleaks (verdict only), commits, rebases onto the remote branch if behind, pushes `HEAD` (never forced), confirms the remote SHA (`verified`), and leaves all worktrees, branches and leftover folders in place. Cleanup requires a separate request naming the approved items.
+Supply `-m "<type>: <short change summary>"` from the actual changes, using
+Cohen's note when provided. The helper uses it for snapshots and the PR title.
+The helper:
 
-- `revalidate` (exit `2`): upstream commits were rebased in. Re-run the checks, then run Apply again with no `-m` and no paths (plus the same `--to`). Without `-m` and paths, Apply never commits; it only pushes.
-- Rebase conflict: Apply aborts the rebase and the commit stays local. Resolve it, re-run checks, apply again.
-- Scan finding: nothing is committed and the index is restored. Use `gitleaks-preflight` and read only redacted output. Allow a finding only after you confirm a false positive.
-- Push failed or timed out: run `git ls-remote <remote> <branch>` first. Never re-run Apply or a deploy automatically.
-- Do not force-push, skip hooks, or amend unless Cohen asks. Never print a secret or read a credential or environment file.
+1. Locks this repository across linked worktrees and journals the run.
+2. Fetches its remote; snapshots publishable dirty work through normal commit
+   hooks and secret scans. Existing partially staged exclusions block safely.
+3. Merges the captured branch tips into main, preserving history. A conflict
+   aborts that merge and records the source; resolve locally and resume.
+4. Runs the required prepare/build/check commands against the final commit in
+   an isolated detached worktree. Checks that alter committed inputs block.
+5. Scans and hashes artifacts, scans outgoing commits, and pushes the exact
+   validated SHA without force. It checks source drift before publication.
+6. Tracks exact-SHA CI, promotes a verified Cloudflare version, or runs the
+   project's declared release commands. It records intent before every external
+   mutation and never blindly repeats an uncertain operation.
+7. Runs declared smoke checks and publishing steps, fast-forwards the source
+   worktree branches to the unified main commit, and verifies captured tips
+   remain reachable. Branches, worktrees, and validation evidence are retained.
 
-## 3. Deploy
+If a shared guard requires its existing one-use receipt, issue it with
+`~/.agents/hooks/approve-once.py --cwd <absolute-cwd> --command <exact-command>`
+immediately before the authorized command, then execute that command separately
+in the same directory. Reuse `/ship` authorization; do not ask again. A receipt
+cannot override a hard denial or authorize App Review, secret reads, forced
+pushes, hook skipping, or unrelated projects. Never weaken shared guards to
+make shipping work.
 
-- If `deploy.ci` lists a workflow that runs on this push, wait for that run and do not deploy by hand. Find it with `gh run list --commit <sha> --json databaseId,status,workflowName`, then run `gh run watch <id> --exit-status` in the background. A queued run is not shipped.
-- Otherwise deploy with the project script (`deploy.scripts`). Read `~/.agents/skills/deploy-cloudflare/SKILL.md` and follow it. Keep each named Worker environment. A manual deploy uploads the working tree, not the commit: stop if `left` lists files inside the deploy inputs. Build, scan the output with `gitleaks dir <output> --redact --no-banner`, then deploy once.
-- No deploy defined: say so. The verified push is the ship.
+## Recover and finish
 
-## 4. Verify and report
+```bash
+python3 ~/.agents/skills/ship/scripts/ship.py --status
+python3 ~/.agents/skills/ship/scripts/ship.py --resume
+```
 
-Open the live URL and confirm the change itself, not only an HTTP 200. Use the browser routing in `~/.agents/AGENTS.md`. If no browser connects, say the browser check did not run and finish the rest.
+The journal is `<git-common-dir>/ship/latest.json`. Local failures can be fixed
+and resumed, including profile/check fixes before external operations begin.
+After a push/upload/deploy/publish starts, preserve the validated SHA and
+artifacts. Resume reconciles remote/provider state; unknown outcomes block
+rather than repeat. Polling status and health endpoints read-only is safe.
+Never auto-retry the same state-changing external action.
 
-Report the project, commit SHA, push destination and `verified`, deploy status and URL, each check and its result, warnings, cleanup candidates if relevant, and each item not verified. Say "shipped" only when the push is verified and any deploy is confirmed live.
+An unchanged, completed release is verified read-only and not published again.
+Use `--all --apply --new-release` only for a deliberate corrective/repeated
+release after establishing the prior outcome; it never overrides an unfinished
+or uncertain run. Do not create fake source changes to force a redeploy.
+
+If `followup_required` is true, the captured release completed but another
+process added work during publication. Start a fresh `--all` release to collect
+that work; do not replay the completed run. Continue until the repository is
+stable, or report the active source that prevents a stable completion.
+
+Resolve local problems and continue independently. For a terminal blocker,
+report its exact cause, preserved work, and next required action. Do not ask
+“want me to continue?” or turn a technical failure into another approval flow.
+
+For web launches and signup/checkout/pricing changes, run
+`launch-qa-five-personas` on an isolated preview before production promotion;
+fix blockers until PASS. Cloudflare Version URLs use production resources and
+are not isolated write-test environments. Respect the project's CI deployment
+path; never launch a second manual deploy alongside it. Follow
+`deploy-cloudflare` for account, environment, output scan, and provider details.
+Native release scripts may notarize or upload to TestFlight; never submit to
+App Review without Cohen's explicit yes.
+
+After the helper, open the live site/app and exercise the changed behavior.
+A successful CI run or HTTP 200 alone does not prove the flow works. Complete
+any documented native release or browser checks that require the owning tools.
+If a capability is unavailable, name that gap and finish independent work.
+
+Report main's full SHA, remote verification, included branches/worktrees,
+checks, deployment/publish identities and URLs, live verification, and excluded
+local leftovers. Say “shipped” only when all required release stages are verified.
+Do not call the working tree completely clean if protected or excluded files
+remain. This skill does not delete retained branches or worktree folders.

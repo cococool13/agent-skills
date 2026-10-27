@@ -312,6 +312,28 @@ class GuardContract(unittest.TestCase):
     def test_ask(self):
         self.matrix(ASK + EXTRA_ASK, "ask")
 
+    def test_ship_plan_is_safe_but_apply_stays_gated(self):
+        script = HOME + "/.agents/skills/ship/scripts/ship.py"
+        source = HOME + "/Projects/Agent Skills/skills/ship/scripts/ship.py"
+        self.matrix([
+            f'python3 "{script}"',
+            f'python3 "{script}" --verify-only',
+            f'python3 "{script}" --all',
+            f'python3 "{script}" --status',
+            f'python3 "{script}" --cleanup-report --skip-fetch',
+            f'python3 "{source}" --plan-only --skip-fetch --json',
+        ], "allow")
+        self.matrix([
+            f'python3 "{script}" --apply',
+            f'python3 "{script}" --all --apply',
+            f'python3 "{script}" --resume',
+            f'python3 "{script}" --unknown',
+            'python3 /tmp/ship.py',
+            f'python3 "{script}" && wrangler deploy',
+            f'python3 "{script}" --apply --plan-only',
+        ], "ask")
+        self.matrix([f'python3 "{script}"; cat .env'], "deny")
+
     def test_one_use_approval_receipt(self):
         command = "wrangler deploy"
         with tempfile.TemporaryDirectory() as home:
