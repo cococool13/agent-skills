@@ -16,7 +16,7 @@ Wrangler is logged in as `cohencool@icloud.com` on account **The Mecca**
 Agents operate the account with the Cloudflare Code Mode MCP at
 `https://mcp.cloudflare.com/mcp`. Call `search`, then `execute`. `docs` searches
 the docs. Grok's server name is `cloudflare`. Claude's is `cloudflare-api`.
-Codex's is `cloudflare`. Leave `cloudflare-bindings`, `cloudflare-builds`, and
+Codex's is `cloudflare`. Cursor's is `cloudflare-api` in `~/.cursor/mcp.json` (plugin Cloudflare MCPs stay empty/disabled). Leave `cloudflare-bindings`, `cloudflare-builds`, and
 `cloudflare-observability` disabled. Those servers repeat the same API as
 thousands of tools.
 
