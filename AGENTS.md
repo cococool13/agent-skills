@@ -4,7 +4,10 @@ Personal agent skills library. Installed to `~/.agents/skills` via the skills CL
 
 ## Commands
 
+`scripts/check.sh` is the gate that both lefthook pre-push and `skills-ci` run. After cloning, run `lefthook install` once to get the hooks.
+
 ```bash
+scripts/check.sh
 python3 -m unittest discover -s skills/ship/scripts -p 'test_*.py'
 python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_*.py'
 python3 skills/repo-upgrade/scripts/preflight.py --selftest && python3 skills/repo-upgrade/scripts/scan.py --selftest

@@ -64,10 +64,10 @@ class ContextAuditTests(unittest.TestCase):
 
     def test_ci_audit_command_passes_on_a_machine_without_client_homes(self):
         repo = Path(__file__).resolve().parents[3]
-        workflow = repo / '.github/workflows/skills-ci.yml'
-        if not workflow.is_file():
-            self.skipTest('installed copy has no workflow')
-        args = shlex.split(re.search(r'audit-context\.py\s+(.*?)\n\s+- name:', workflow.read_text(), re.S).group(1))
+        gate = repo / 'scripts/check.sh'
+        if not gate.is_file():
+            self.skipTest('installed copy has no gate script')
+        args = shlex.split(re.search(r'^python3 \S*audit-context\.py (.*)', gate.read_text(), re.M).group(1))
         self.assertIn('--skip-home-entrypoints', args)
         script = str(Path(__file__).with_name('audit-context.py'))
         with tempfile.TemporaryDirectory() as home:
@@ -79,6 +79,32 @@ class ContextAuditTests(unittest.TestCase):
             machine = subprocess.run([sys.executable, script, *strict], cwd=repo, env=env, capture_output=True, text=True)
             self.assertEqual(machine.returncode, 1)
             self.assertEqual(machine.stdout.count('instruction entrypoint missing'), 4)
+
+    def test_ci_and_pre_push_run_the_same_gate(self):
+        repo = Path(__file__).resolve().parents[3]
+        workflow = repo / '.github/workflows/skills-ci.yml'
+        if not workflow.is_file():
+            self.skipTest('installed copy has no workflow')
+        self.assertTrue(os.access(repo / 'scripts/check.sh', os.X_OK))
+        self.assertIn('unset $(git rev-parse --local-env-vars)', (repo / 'scripts/check.sh').read_text())
+        self.assertIn('run: scripts/check.sh', workflow.read_text())
+        pre_push = (repo / 'lefthook.yml').read_text().split('pre-push:')[1]
+        self.assertIn('run: scripts/check.sh', pre_push)
+
+    def test_repo_upgrade_selftest_leaves_an_inherited_git_dir_alone(self):
+        # Git exports GIT_DIR into hooks; the fixture's init and commit once hit the pushing repo.
+        script = Path(__file__).resolve().parents[2] / 'repo-upgrade/scripts/preflight.py'
+        clean = {k: v for k, v in os.environ.items() if not k.startswith('GIT_')}
+        with tempfile.TemporaryDirectory() as directory:
+            outer = Path(directory) / 'outer'
+            subprocess.run(['git', 'init', '-q', str(outer)], env=clean, check=True)
+            config = (outer / '.git/config').read_text()
+            run = subprocess.run([sys.executable, str(script), '--selftest'], capture_output=True, text=True,
+                                 env={**clean, 'GIT_DIR': str(outer / '.git')})
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual((outer / '.git/config').read_text(), config)
+            log = subprocess.run(['git', '-C', str(outer), 'rev-list', '--all'], env=clean, capture_output=True, text=True)
+            self.assertEqual(log.stdout, '')
 
     def test_folded_description_stops_before_next_metadata_field(self):
         text = '---\nname: sample\ndescription: >-\n  Use when reading\n  project data.\nmetadata:\n  note: do not load\n---\nBody is not discovery text.'
