@@ -2,7 +2,7 @@
 # Weekly skills update (LaunchAgent com.cococool.skills-update, Monday 10:00).
 # 1. Writes a diff report to ~/Library/Logs/skills-update/<date>.md (locked vs upstream HEAD).
 # 2. Updates only lock entries that carry a `ref` (pinned sha), with the pinned local
-#    skills CLI (~/.local/share/skills, skills@1.7.2). No -y. Unpinned skills wait for a
+#    skills CLI (~/.local/share/skills, skills@1.7.5). No -y. Unpinned skills wait for a
 #    manual `skills update <name>` after review.
 # 3. Restores overlays, then audits the library.
 # --dry-run: report and checks only; changes nothing in ~/.agents/skills.
