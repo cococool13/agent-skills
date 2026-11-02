@@ -51,6 +51,14 @@ You usually don’t type the skill name. Just describe the job.
 - [`create-hook`](skills/create-hook/SKILL.md) — Create or repair lifecycle hooks for Codex, Cursor, Claude Code, or Grok
 - [`canvas`](skills/canvas/SKILL.md) — Create or edit a `.canvas.tsx` artifact
 - [`maintain-skill-library`](skills/maintain-skill-library/SKILL.md) — Keep your skill library tidy
+- [`ai-stack-audit`](skills/ai-stack-audit/SKILL.md) — Audit agent instructions, skills, hooks, MCP setup and permissions
+
+### Launch and research
+
+- [`launch-qa-five-personas`](skills/launch-qa-five-personas/SKILL.md) — Five first-time visitors test a live or preview site in a real browser
+- [`preship-four-personas`](skills/preship-four-personas/SKILL.md) — Customer, competitor, skeptic and conversion review of launch messaging
+- [`stack-check`](skills/stack-check/SKILL.md) — Check Stripe, RevenueCat, PostHog and App Store Connect agree on a product
+- [`web-research-routing`](skills/web-research-routing/SKILL.md) — Pick the cheapest search or extraction tool for a research job
 
 ### From their authors
 
