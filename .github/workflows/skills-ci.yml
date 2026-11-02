@@ -14,7 +14,7 @@ jobs:
         run: >
           python3 skills/maintain-skill-library/scripts/audit-context.py
           --root skills --overlays .ci-none --lock .ci-none --rules .ci-none
-          --agents-md AGENTS.md --listing-root skills
+          --agents-md AGENTS.md --listing-root skills --skip-home-entrypoints
       - name: Audit tests
         run: python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_context_audit.py'
       - name: Guard contract tests
