@@ -127,6 +127,18 @@ description: "Use when matching C:\\data."
             self.assertEqual(audit.listing_budget(roots, 0.02, 1250)[2], [])
             self.assertEqual(len(audit.listing_budget(roots, 0.02, 1000)[2]), 1)
 
+    def test_listing_budget_honors_trim_script_overrides(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'skills'
+            for name in ('one', 'two', 'three'):
+                (root / name).mkdir(parents=True)
+                (root / name / 'SKILL.md').write_text(f'---\nname: {name}\ndescription: ' + 'd' * 50 + '\n---\n')
+            trim = Path(directory) / 'claude-trim.sh'
+            trim.write_text('NAME_ONLY=(one\n  other)\nSLASH_ONLY=(two)\n')
+            self.assertEqual(audit.listing_overrides(trim), ({'one', 'other'}, {'two'}))
+            self.assertEqual(audit.listing_budget([root], 1, 1000, trim)[0], 7 + 0 + 59)
+            self.assertEqual(audit.listing_budget([root], 1, 1000, Path(directory) / 'missing')[0], 57 + 57 + 59)
+
 
 if __name__ == '__main__':
     unittest.main()
