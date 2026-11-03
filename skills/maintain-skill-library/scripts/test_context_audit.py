@@ -1,6 +1,11 @@
 """Context audit failure cases, without touching a live library."""
 import importlib.util
+import os
 from pathlib import Path
+import re
+import shlex
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -47,6 +52,33 @@ class ContextAuditTests(unittest.TestCase):
             entry.unlink()
             entry.write_text('Stale local instructions\n')
             self.assertTrue(any('no explicit pointer' in p for p in audit.instruction_entrypoints(home, canonical)))
+
+    def test_skipping_home_entrypoints_keeps_the_default_strict(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            canonical = home / 'AGENTS-canonical.md'
+            self.assertIn('canonical instructions missing', audit.instruction_entrypoints(home, canonical, False)[0])
+            canonical.write_text('Canonical rules\n')
+            self.assertEqual(audit.instruction_entrypoints(home, canonical, False), [])
+            self.assertEqual(len(audit.instruction_entrypoints(home, canonical)), 4)
+
+    def test_ci_audit_command_passes_on_a_machine_without_client_homes(self):
+        repo = Path(__file__).resolve().parents[3]
+        workflow = repo / '.github/workflows/skills-ci.yml'
+        if not workflow.is_file():
+            self.skipTest('installed copy has no workflow')
+        args = shlex.split(re.search(r'audit-context\.py\s+(.*?)\n\s+- name:', workflow.read_text(), re.S).group(1))
+        self.assertIn('--skip-home-entrypoints', args)
+        script = str(Path(__file__).with_name('audit-context.py'))
+        with tempfile.TemporaryDirectory() as home:
+            env = {**os.environ, 'HOME': home}
+            ci = subprocess.run([sys.executable, script, *args], cwd=repo, env=env, capture_output=True, text=True)
+            self.assertEqual(ci.returncode, 0, ci.stdout)
+            self.assertIn('Home instruction entrypoints: skipped', ci.stdout)
+            strict = [arg for arg in args if arg != '--skip-home-entrypoints']
+            machine = subprocess.run([sys.executable, script, *strict], cwd=repo, env=env, capture_output=True, text=True)
+            self.assertEqual(machine.returncode, 1)
+            self.assertEqual(machine.stdout.count('instruction entrypoint missing'), 4)
 
     def test_folded_description_stops_before_next_metadata_field(self):
         text = '---\nname: sample\ndescription: >-\n  Use when reading\n  project data.\nmetadata:\n  note: do not load\n---\nBody is not discovery text.'
@@ -126,6 +158,18 @@ description: "Use when matching C:\\data."
             self.assertEqual(audit.listing_chars(roots), 100)
             self.assertEqual(audit.listing_budget(roots, 0.02, 1250)[2], [])
             self.assertEqual(len(audit.listing_budget(roots, 0.02, 1000)[2]), 1)
+
+    def test_listing_budget_honors_trim_script_overrides(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'skills'
+            for name in ('one', 'two', 'three'):
+                (root / name).mkdir(parents=True)
+                (root / name / 'SKILL.md').write_text(f'---\nname: {name}\ndescription: ' + 'd' * 50 + '\n---\n')
+            trim = Path(directory) / 'claude-trim.sh'
+            trim.write_text('NAME_ONLY=(one\n  other)\nSLASH_ONLY=(two)\n')
+            self.assertEqual(audit.listing_overrides(trim), ({'one', 'other'}, {'two'}))
+            self.assertEqual(audit.listing_budget([root], 1, 1000, trim)[0], 7 + 0 + 59)
+            self.assertEqual(audit.listing_budget([root], 1, 1000, Path(directory) / 'missing')[0], 57 + 57 + 59)
 
 
 if __name__ == '__main__':

@@ -90,10 +90,12 @@ def agents_md_size(path: Path) -> list[str]:
     return [f'{path}: {size} characters; keep it under {AGENTS_MD_LIMIT}'] if size >= AGENTS_MD_LIMIT else []
 
 
-def instruction_entrypoints(home: Path, canonical: Path) -> list[str]:
+def instruction_entrypoints(home: Path, canonical: Path, check_home: bool = True) -> list[str]:
     """Check user-owned instruction adapters only; never inspect client configs."""
     if not canonical.is_file():
         return [f'{canonical}: canonical instructions missing']
+    if not check_home:
+        return []
     problems = []
     for relative in ('AGENTS.md', '.codex/AGENTS.md', '.cursor/AGENTS.md',
                      '.grok/AGENTS.md', '.claude/CLAUDE.md'):
@@ -120,8 +122,22 @@ def instruction_entrypoints(home: Path, canonical: Path) -> list[str]:
     return problems
 
 
-def listing_chars(roots: list[Path]) -> int:
-    """Characters of the skill listing a client builds: name + description + 4 per skill, once per name."""
+def listing_overrides(trim_script: Path) -> tuple[set[str], set[str]]:
+    """The (name-only, slash-only) skills that claude-trim.sh applies through skillOverrides."""
+    try:
+        text = trim_script.read_text()
+    except OSError:
+        return set(), set()
+    lists = [re.search(rf'^{array}=\((.*?)\)', text, re.M | re.S) for array in ('NAME_ONLY', 'SLASH_ONLY')]
+    name_only, slash_only = (set(match.group(1).split()) if match else set() for match in lists)
+    return name_only, slash_only
+
+
+def listing_chars(roots: list[Path], name_only: set[str] = frozenset(), slash_only: set[str] = frozenset()) -> int:
+    """Characters of the skill listing a client builds: name + description + 4 per skill, once per name.
+
+    A name-only skill costs its name and separator. A slash-only skill is not listed.
+    """
     seen = {}
     for root in roots:
         folders = sorted(root.iterdir()) if root.is_dir() else []
@@ -133,13 +149,19 @@ def listing_chars(roots: list[Path]) -> int:
                     name, description = metadata(skill.read_text())
                 except (ValueError, OSError):
                     continue
-                seen.setdefault(name, len(name) + len(description) + 4)
+                if name in slash_only:
+                    seen.setdefault(name, 0)
+                elif name in name_only:
+                    seen.setdefault(name, len(name) + 4)
+                else:
+                    seen.setdefault(name, len(name) + len(description) + 4)
     return sum(seen.values())
 
 
-def listing_budget(roots: list[Path], fraction: float, context_tokens: int) -> tuple[int, int, list[str]]:
+def listing_budget(roots: list[Path], fraction: float, context_tokens: int, trim_script: Path | None = None) -> tuple[int, int, list[str]]:
     """Claude Code lists skills within skillListingBudgetFraction of the context (about 4 chars/token)."""
-    used, budget = listing_chars(roots), int(fraction * context_tokens * 4)
+    name_only, slash_only = listing_overrides(trim_script) if trim_script else (set(), set())
+    used, budget = listing_chars(roots, name_only, slash_only), int(fraction * context_tokens * 4)
     problem = f'skill listing {used} characters exceeds the budget {budget} ({fraction} of {context_tokens} tokens); descriptions get dropped'
     return used, budget, [problem] if used > budget else []
 
@@ -198,6 +220,8 @@ def main() -> int:
     parser.add_argument('--lock', type=Path, default=Path.home() / '.agents/.skill-lock.json')
     parser.add_argument('--agents-md', type=Path, default=Path.home() / '.agents/AGENTS.md')
     parser.add_argument('--home', type=Path, default=Path.home(), help='Home whose instruction adapters to check')
+    parser.add_argument('--skip-home-entrypoints', action='store_true',
+                        help='Skip machine-only instruction adapters, for CI runners that have none')
     parser.add_argument('--json', action='store_true')
     parser.add_argument('--rules', type=Path, action='append', help='Rule roots; defaults to this user’s Cursor and Claude rules')
     parser.add_argument('--listing-root', type=Path, action='append',
@@ -210,9 +234,10 @@ def main() -> int:
     result['errors'].extend(retired_skill_references(args.root, rules))
     result['errors'].extend(bare_tool_grants(args.root, args.lock))
     result['errors'].extend(agents_md_size(args.agents_md))
-    result['errors'].extend(instruction_entrypoints(args.home, args.agents_md))
+    result['errors'].extend(instruction_entrypoints(args.home, args.agents_md, not args.skip_home_entrypoints))
+    result['home_entrypoints'] = 'skipped' if args.skip_home_entrypoints else 'checked'
     listing_roots = args.listing_root or [Path.home() / '.claude/skills']
-    used, budget, problems = listing_budget(listing_roots, args.listing_fraction, args.context_tokens)
+    used, budget, problems = listing_budget(listing_roots, args.listing_fraction, args.context_tokens, Path.home() / '.agents/claude-trim.sh')
     result['listing'] = {'characters': used, 'budget': budget}
     result['errors'].extend(problems)
     if args.json:
@@ -220,6 +245,7 @@ def main() -> int:
     else:
         print(f"Context audit: {result['skills']} top-level skills; {result['description_characters']} description characters")
         print(f"Skill listing: {used} of {budget} characters")
+        print(f"Home instruction entrypoints: {result['home_entrypoints']}")
         for item in result['errors']:
             print('ERROR: ' + item)
         for item in result['warnings']:
