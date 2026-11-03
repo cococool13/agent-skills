@@ -1,0 +1,16 @@
+{
+ "servers": {
+  "web": {
+   "tool_count": 1,
+   "names_sha256": "1234567890abcdef",
+   "tools": {
+    "fetch": {
+     "desc_sha256": "abcdefabcdefabcd",
+     "schema_sha256": "0000000000000000",
+     "flags": []
+    }
+   }
+  }
+ },
+ "server_instructions": {}
+}

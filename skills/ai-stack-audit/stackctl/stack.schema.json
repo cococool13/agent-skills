@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cococool13.invalid/stackctl/stack.schema.json",
+  "title": "stackctl manifest",
+  "description": "Single source of truth for rules, skills, MCP servers, hooks and permission intents across Claude Code, Codex, Cursor, Claude desktop and Grok. Secret VALUES are forbidden anywhere in this document; only environment variable NAMES and Keychain item names are allowed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "secrets", "clients", "rules", "skills", "hooks", "mcp_servers", "policy"],
+  "$defs": {
+    "home_path": {
+      "type": "string",
+      "pattern": "^(~|/)[^\\n]*$",
+      "description": "Absolute path or ~-relative path."
+    },
+    "env_name": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+      "description": "An environment variable NAME. Never a value."
+    },
+    "no_secret_string": {
+      "type": "string",
+      "maxLength": 512,
+      "not": {
+        "anyOf": [
+          {"pattern": "(?i)bearer\\s+[A-Za-z0-9._\\-]{16,}"},
+          {"pattern": "(?i)(sk|pk|rk|ghp|gho|xox[abp]|AKIA|AIza)[A-Za-z0-9_\\-]{16,}"},
+          {"pattern": "^(?=.*[0-9])[A-Za-z0-9+/=]{40,}$"}
+        ]
+      },
+      "description": "A string that must not look like a credential."
+    },
+    "client_id": {"type": "string", "enum": ["claude_cli", "codex", "cursor", "claude_desktop", "grok", "chatgpt_desktop"]},
+    "client_flag": {
+      "description": "true/false, or how the client gets the server: via_cursor (Grok compat import), override (client keeps its own entry), bridge (stdio bridge wrapper).",
+      "anyOf": [{"type": "boolean"}, {"type": "string", "enum": ["via_cursor", "override", "bridge"]}]
+    },
+    "client_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "claude_cli": {"$ref": "#/$defs/client_flag"},
+        "codex": {"$ref": "#/$defs/client_flag"},
+        "cursor": {"$ref": "#/$defs/client_flag"},
+        "claude_desktop": {"$ref": "#/$defs/client_flag"},
+        "grok": {"$ref": "#/$defs/client_flag"},
+        "chatgpt_desktop": {"$ref": "#/$defs/client_flag"}
+      }
+    },
+    "capability": {
+      "type": "string",
+      "enum": ["read", "write", "delete", "shell", "send", "spend", "trade", "deploy", "filesystem", "network", "execute-sql"]
+    },
+    "pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["npm-global", "npx", "local-binary", "vendor-binary", "os-bundled", "plugin"]},
+        "package": {"type": "string", "pattern": "^(@[a-z0-9-~][a-z0-9-._~]*/)?[a-z0-9-~][a-z0-9-._~]*$"},
+        "version": {
+          "type": "string",
+          "description": "Exact semver. 'latest' is accepted by the schema only so that today's state can be imported; `stackctl check` reports it as drift D-PIN.",
+          "pattern": "^(latest|[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?)$"
+        },
+        "path": {"type": "string"},
+        "lockfile": {"type": "boolean"}
+      }
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["none", "oauth", "bearer_env", "header_env"]},
+        "env": {"$ref": "#/$defs/env_name"},
+        "header": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]*$"},
+        "claude_cli": {"type": "string", "enum": ["oauth", "bearer_env", "header_env"], "description": "Override when Claude Code authenticates differently (it has OAuth for Refero and PostHog)."}
+      },
+      "allOf": [
+        {"if": {"properties": {"kind": {"enum": ["bearer_env", "header_env"]}}}, "then": {"required": ["env"]}},
+        {"if": {"properties": {"kind": {"const": "header_env"}}}, "then": {"required": ["header"]}}
+      ]
+    },
+    "mcp_server": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "transport", "capabilities", "clients"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"},
+        "transport": {"type": "string", "enum": ["stdio", "http", "sse"]},
+        "command": {"$ref": "#/$defs/home_path_or_cmd"},
+        "args": {"type": "array", "items": {"$ref": "#/$defs/no_secret_string"}, "maxItems": 32},
+        "url": {"type": "string", "format": "uri", "pattern": "^https://[^?#\\s]+$", "description": "https only, no query string (tokens in query strings are forbidden)."},
+        "pin": {"$ref": "#/$defs/pin"},
+        "auth": {"$ref": "#/$defs/auth"},
+        "env_names": {"type": "array", "items": {"$ref": "#/$defs/env_name"}, "uniqueItems": true, "description": "env keys written into the client config (values come from the client env or ${VAR} refs)."},
+        "wrapper_env_names": {"type": "array", "items": {"$ref": "#/$defs/env_name"}, "uniqueItems": true, "description": "secrets a stdio wrapper reads itself from the env file; never written into client configs."},
+        "capabilities": {"type": "array", "items": {"$ref": "#/$defs/capability"}, "minItems": 1, "uniqueItems": true},
+        "clients": {"$ref": "#/$defs/client_flags"},
+        "enabled_tools": {"type": "array", "items": {"type": "string"}},
+        "disabled_tools": {"type": "array", "items": {"type": "string"}},
+        "managed": {"type": "boolean", "default": true, "description": "false = host-owned entry; stackctl checks presence only and never renders it."},
+        "host_owned": {"type": "array", "items": {"$ref": "#/$defs/client_id"}},
+        "startup_timeout_s": {"type": "integer", "minimum": 1, "maximum": 600},
+        "tool_timeout_s": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "note": {"type": "string", "maxLength": 400}
+      },
+      "allOf": [
+        {"if": {"properties": {"transport": {"const": "stdio"}, "managed": {"not": {"const": false}}}}, "then": {"required": ["command", "pin"]}},
+        {"if": {"properties": {"transport": {"enum": ["http", "sse"]}}}, "then": {"required": ["url", "auth"]}},
+        {"description": "A server with the trade capability must not be enabled on any client unless policy.deny_capabilities omits trade. Enforced by stackctl check (cross-object rule), documented here."}
+      ]
+    },
+    "home_path_or_cmd": {"type": "string", "pattern": "^(~|/|[a-z][a-z0-9-]*$)", "description": "Absolute path, ~ path, or a bare executable name on PATH (npx, xcrun)."},
+    "hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "source", "event", "clients"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "source": {"type": "string"},
+        "link": {"$ref": "#/$defs/home_path"},
+        "event": {"type": "string", "enum": ["file_read", "shell_pre", "file_write_post", "session_start", "prompt_submit", "tool_post", "stop", "session_end", "model_switch", "config_change", "lifecycle_set"]},
+        "events": {"type": "array", "items": {"type": "string"}},
+        "fail_closed": {"type": "boolean"},
+        "warn_only": {"type": "boolean"},
+        "timeout_s": {"type": "integer", "minimum": 1, "maximum": 300},
+        "managed": {"type": "boolean", "default": true},
+        "clients": {"$ref": "#/$defs/client_flags"}
+      }
+    },
+    "fragment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "file", "targets"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+        "file": {"type": "string", "pattern": "^rules/[a-z0-9-]+\\.md$"},
+        "targets": {"type": "array", "items": {"$ref": "#/$defs/client_id"}, "minItems": 1},
+        "always": {"type": "boolean"},
+        "globs": {"type": "string"}
+      }
+    }
+  },
+  "properties": {
+    "version": {"type": "integer", "const": 1},
+    "secrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["env_file", "env_file_mode", "names"],
+      "properties": {
+        "env_file": {"$ref": "#/$defs/home_path"},
+        "env_file_mode": {"type": "string", "const": "600"},
+        "keychain_service_prefix": {"type": "string"},
+        "names": {"type": "array", "items": {"$ref": "#/$defs/env_name"}, "uniqueItems": true},
+        "stale": {"type": "array", "items": {"$ref": "#/$defs/env_name"}}
+      }
+    },
+    "clients": {
+      "type": "object",
+      "propertyNames": {"$ref": "#/$defs/client_id"},
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["renderable"],
+        "properties": {
+          "mcp_file": {"$ref": "#/$defs/home_path"},
+          "mcp_key": {"type": "string", "enum": ["mcpServers", "mcp_servers"]},
+          "settings_file": {"$ref": "#/$defs/home_path"},
+          "hooks_file": {"$ref": "#/$defs/home_path"},
+          "rules_entry": {"$ref": "#/$defs/home_path"},
+          "rules_dir": {"$ref": "#/$defs/home_path"},
+          "skills_view": {"$ref": "#/$defs/home_path"},
+          "stdio_only": {"type": "boolean"},
+          "imports_cursor_mcp": {"type": "boolean"},
+          "renderable": {"anyOf": [{"type": "boolean"}, {"const": "partial"}]},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "targets"],
+      "properties": {
+        "source": {"$ref": "#/$defs/home_path"},
+        "context": {"$ref": "#/$defs/home_path"},
+        "targets": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/client_id"},
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode", "file"],
+            "properties": {"mode": {"enum": ["import", "symlink", "copy"]}, "file": {"$ref": "#/$defs/home_path"}}
+          }
+        },
+        "fragments": {"type": "array", "items": {"$ref": "#/$defs/fragment"}}
+      }
+    },
+    "skills": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical", "views"],
+      "properties": {
+        "canonical": {"$ref": "#/$defs/home_path"},
+        "lock": {"$ref": "#/$defs/home_path"},
+        "overlays": {"$ref": "#/$defs/home_path"},
+        "updater": {"type": "string"},
+        "updater_pin": {"anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}]},
+        "views": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/client_id"},
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["dir"],
+            "properties": {
+              "dir": {"$ref": "#/$defs/home_path"},
+              "skip": {"type": "array", "items": {"type": "string"}},
+              "skip_prefixes": {"type": "array", "items": {"type": "string"}},
+              "extra": {"type": "array", "items": {"type": "string"}, "description": "entries allowed in the view that are not in the canonical store (app-owned or claude.ai downloads)."},
+              "native_reads_canonical": {"anyOf": [{"type": "boolean"}, {"const": "unknown"}]}
+            }
+          }
+        },
+        "app_owned": {"type": "array", "items": {"type": "object", "required": ["name", "target", "preserve"], "properties": {"name": {"type": "string"}, "target": {"type": "string"}, "preserve": {"const": true}}}},
+        "external_sources": {"type": "array", "items": {"type": "object", "required": ["name", "target"], "properties": {"name": {"type": "string"}, "target": {"type": "string"}, "inverted": {"type": "boolean"}}}}
+      }
+    },
+    "hooks": {"type": "array", "items": {"$ref": "#/$defs/hook"}},
+    "mcp_servers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/mcp_server"},
+      "minItems": 1
+    },
+    "bridges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "wraps", "pin"],
+        "properties": {
+          "name": {"type": "string"},
+          "path": {"$ref": "#/$defs/home_path"},
+          "wraps": {"type": "string"},
+          "pin": {"type": "string"},
+          "sources_whole_env_file": {"type": "boolean"}
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deny_capabilities", "ask_capabilities"],
+      "properties": {
+        "deny_capabilities": {"type": "array", "items": {"$ref": "#/$defs/capability"}},
+        "ask_capabilities": {"type": "array", "items": {"$ref": "#/$defs/capability"}},
+        "deny_tools": {"type": "array", "items": {"type": "string", "pattern": "^mcp__[A-Za-z0-9_-]+__[A-Za-z0-9_*-]+$"}},
+        "ask_tools": {"type": "array", "items": {"type": "string", "pattern": "^mcp__[A-Za-z0-9_-]+__[A-Za-z0-9_*-]+$"}},
+        "shell_ask": {"type": "array", "items": {"type": "string"}},
+        "render": {"type": "object"}
+      }
+    },
+    "out_of_scope": {"type": "object"}
+  }
+}

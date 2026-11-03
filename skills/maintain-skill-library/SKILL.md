@@ -19,7 +19,7 @@ Adapt paths and schedule names to your machine. The table below is how the autho
 
 Weekly (Monday 10:00): LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
 from `~/Projects/Agent Skills/skills/maintain-skill-library/` with the pinned CLI in
-`~/.local/share/skills` (`skills@1.7.2`; `npm ci` from `skills-cli/`): diff report in
+`~/.local/share/skills` (`skills@1.7.5`; `npm ci` from `skills-cli/`): diff report in
 `~/Library/Logs/skills-update/<date>.md` → update of lock entries with a `ref` (no `-y`) →
 local overlays → conflict-checked instruction edits → report scan-path duplicates.
 `update-skills.sh --dry-run` writes the report and runs the checks only. To take an upstream

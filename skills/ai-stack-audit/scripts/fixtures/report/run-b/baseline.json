@@ -1,0 +1,14 @@
+{
+ "counts": {
+  "skills_agents": 99,
+  "launch_agents": 15
+ },
+ "config_sha256_prefix": {
+  ".claude/settings.json": {
+   "sha": "2222222222222222"
+  },
+  ".zshrc": {
+   "sha": "3333333333333333"
+  }
+ }
+}
