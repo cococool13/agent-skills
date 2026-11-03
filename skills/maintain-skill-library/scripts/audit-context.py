@@ -90,10 +90,12 @@ def agents_md_size(path: Path) -> list[str]:
     return [f'{path}: {size} characters; keep it under {AGENTS_MD_LIMIT}'] if size >= AGENTS_MD_LIMIT else []
 
 
-def instruction_entrypoints(home: Path, canonical: Path) -> list[str]:
+def instruction_entrypoints(home: Path, canonical: Path, check_home: bool = True) -> list[str]:
     """Check user-owned instruction adapters only; never inspect client configs."""
     if not canonical.is_file():
         return [f'{canonical}: canonical instructions missing']
+    if not check_home:
+        return []
     problems = []
     for relative in ('AGENTS.md', '.codex/AGENTS.md', '.cursor/AGENTS.md',
                      '.grok/AGENTS.md', '.claude/CLAUDE.md'):
@@ -198,6 +200,8 @@ def main() -> int:
     parser.add_argument('--lock', type=Path, default=Path.home() / '.agents/.skill-lock.json')
     parser.add_argument('--agents-md', type=Path, default=Path.home() / '.agents/AGENTS.md')
     parser.add_argument('--home', type=Path, default=Path.home(), help='Home whose instruction adapters to check')
+    parser.add_argument('--skip-home-entrypoints', action='store_true',
+                        help='Skip machine-only instruction adapters, for CI runners that have none')
     parser.add_argument('--json', action='store_true')
     parser.add_argument('--rules', type=Path, action='append', help='Rule roots; defaults to this user’s Cursor and Claude rules')
     parser.add_argument('--listing-root', type=Path, action='append',
@@ -210,7 +214,8 @@ def main() -> int:
     result['errors'].extend(retired_skill_references(args.root, rules))
     result['errors'].extend(bare_tool_grants(args.root, args.lock))
     result['errors'].extend(agents_md_size(args.agents_md))
-    result['errors'].extend(instruction_entrypoints(args.home, args.agents_md))
+    result['errors'].extend(instruction_entrypoints(args.home, args.agents_md, not args.skip_home_entrypoints))
+    result['home_entrypoints'] = 'skipped' if args.skip_home_entrypoints else 'checked'
     listing_roots = args.listing_root or [Path.home() / '.claude/skills']
     used, budget, problems = listing_budget(listing_roots, args.listing_fraction, args.context_tokens)
     result['listing'] = {'characters': used, 'budget': budget}
@@ -220,6 +225,7 @@ def main() -> int:
     else:
         print(f"Context audit: {result['skills']} top-level skills; {result['description_characters']} description characters")
         print(f"Skill listing: {used} of {budget} characters")
+        print(f"Home instruction entrypoints: {result['home_entrypoints']}")
         for item in result['errors']:
             print('ERROR: ' + item)
         for item in result['warnings']:
