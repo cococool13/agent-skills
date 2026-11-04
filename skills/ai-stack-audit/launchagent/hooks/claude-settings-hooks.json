@@ -1,0 +1,14 @@
+{
+  "_comment": "PROPOSAL (PLAN B13). Merge into ~/.claude/settings.json .hooks; do not replace existing entries. Warn-only: the script always exits 0 and never returns a block decision.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "/Users/cococool/.agents/skills/ai-stack-audit/launchagent/hooks/config-drift.sh", "timeout": 10 } ] }
+    ],
+    "FileChanged": [
+      { "hooks": [ { "type": "command", "command": "/Users/cococool/.agents/skills/ai-stack-audit/launchagent/hooks/config-drift.sh", "timeout": 15 } ] }
+    ],
+    "ConfigChange": [
+      { "matcher": "user_settings", "hooks": [ { "type": "command", "command": "/Users/cococool/.agents/skills/ai-stack-audit/launchagent/hooks/config-drift.sh", "timeout": 15 } ] }
+    ]
+  }
+}

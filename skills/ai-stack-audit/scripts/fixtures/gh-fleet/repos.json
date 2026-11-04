@@ -1,0 +1,2 @@
+[{"name":"alpha","visibility":"PUBLIC","isArchived":false,"pushedAt":"2026-10-18T00:00:00Z","defaultBranchRef":{"name":"main"}},
+ {"name":"beta","visibility":"PRIVATE","isArchived":true,"pushedAt":"2026-08-01T00:00:00Z","defaultBranchRef":{"name":"build"}}]
