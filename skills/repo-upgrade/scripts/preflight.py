@@ -235,6 +235,8 @@ def main(argv: list[str]) -> int:
 
 
 def selftest() -> int:
+    for key in [k for k in os.environ if k.startswith("GIT_")]:
+        del os.environ[key]  # a hook's GIT_DIR would aim the fixture's git commands at the real repo
     with tempfile.TemporaryDirectory() as t:
         t = Path(t)
         repo, home = t / "app", t / "home"
@@ -248,7 +250,7 @@ def selftest() -> int:
         skills.mkdir(parents=True)
         (skills / "SKILL.md").write_text("---\nname: ponytail-audit\n---\n")
         for c in (["init", "-q"], ["add", "-A"], ["add", "-f", "dist/out.js"],
-                  ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init"]):
+                  ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-qm", "init"]):
             subprocess.run(["git", "-C", str(repo), *c], check=True, capture_output=True)
         os.environ["REPO_UPGRADE_SKILL_ROOTS"] = str(t / "skills")
         os.environ["REPO_UPGRADE_HOME"] = str(home)

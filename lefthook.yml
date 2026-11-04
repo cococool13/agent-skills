@@ -6,3 +6,9 @@ pre-commit:
       run: /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/test_guard.py && /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/session-budget.py --selftest && /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/lint-dirty.py --selftest
     gitleaks:
       run: gitleaks protect --staged --redact --no-banner
+
+# Pre-push: the skills-ci gate. CI runs the same script.
+pre-push:
+  commands:
+    skills-ci:
+      run: scripts/check.sh
