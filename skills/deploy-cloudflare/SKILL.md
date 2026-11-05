@@ -39,7 +39,7 @@ New sites are Workers with static assets. Leave the Pages projects below as Page
 | Pivot | Pages `pivot` | `pivot-5sx.pages.dev` |
 | Quire | Pages `quire` | `quire-ebz.pages.dev` |
 | Cesura (Baton/site) | Pages `cesura` | `cesura.pages.dev` |
-| Agent Shelf, Prompt Gallery | Pages `agentshelf`, `prompt-to-app-gallery` | `*.pages.dev`. Source is not under `~/Projects` |
+| Prompt Gallery | Pages `prompt-to-app-gallery` | `prompt-to-app-gallery.pages.dev` |
 | Azukari | Worker `they-hold` | `azukari.app` |
 | Spiral Ship | Worker `spiralship-site` | `spiralship.com` |
 | Berth | Worker `berth` | `berth.cohencool.com` |
@@ -52,10 +52,9 @@ Other product sites are Workers named in that project's `wrangler.jsonc` and
 served at `<name>.cohencool.workers.dev`. `tweakeazy.pages.dev` redirects to
 Worker `tweakeazy-site`. The portfolio links the Worker.
 
-`stacks` is the private index and stays behind Access. `stacks-web`,
-`stacks-auth`, `stacks-mcp`, and `stacks-site` are the other Stacks app. Do not
-merge them. Access also covers `dashboard.cohencool.workers.dev` and the signed
-`stacks.cohencool.workers.dev/i/*` bypass.
+`stacks-web`, `stacks-auth`, `stacks-mcp`, and `stacks-site` are the Stacks app.
+The private `stacks` Worker is retired. Access also covers
+`dashboard.cohencool.workers.dev`.
 
 ## Pick the mode from the repo
 
