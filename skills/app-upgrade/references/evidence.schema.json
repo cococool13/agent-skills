@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/app-upgrade/evidence.schema.json",
+  "title": "app-upgrade findings",
+  "type": "object",
+  "required": ["schemaVersion", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": [
+        "id",
+        "area",
+        "severity",
+        "evidenceType",
+        "actorOrTrigger",
+        "case",
+        "result",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "area": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["must-fix", "should-fix", "note"]
+        },
+        "evidenceType": {
+          "type": "string",
+          "enum": [
+            "confirmed-repro",
+            "confirmed-static",
+            "opinion",
+            "needs-validation"
+          ]
+        },
+        "actorOrTrigger": { "type": "string" },
+        "case": { "type": "string" },
+        "control": { "type": ["string", "null"] },
+        "resource": { "type": ["string", "null"] },
+        "result": { "type": "string" },
+        "path": { "type": ["string", "null"] },
+        "command": { "type": ["string", "null"] },
+        "guard": { "type": ["string", "null"] },
+        "status": {
+          "type": "string",
+          "enum": ["fresh", "STALE", "contradicted"]
+        }
+      }
+    }
+  }
+}
