@@ -11,6 +11,7 @@ is marked and its target is not opened or content-hashed.
 from __future__ import annotations
 
 import argparse
+import os
 import hashlib
 import json
 import subprocess
@@ -90,8 +91,12 @@ def _resolves_inside(repo: Path, path: Path) -> bool:
 def _symlink_component(repo: Path, path: Path) -> bool:
     """True when path or a checkout ancestor is a symlink. Errors fail closed."""
     try:
-        root = repo.resolve()
+        # Walk from the checkout path as given; resolving it first would hide an
+        # ancestor link when the checkout sits under one (macOS /tmp -> /private/tmp).
+        root = Path(os.path.abspath(repo))
         current = path if path.is_absolute() else root / path
+        if not current.is_relative_to(root) and current.is_relative_to(repo.resolve()):
+            root = repo.resolve()
         while True:
             if current.is_symlink():
                 return True
