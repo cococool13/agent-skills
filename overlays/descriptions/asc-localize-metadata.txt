@@ -1,0 +1,1 @@
+Use when translating and syncing App Store listing descriptions, keywords, subtitles, release notes, or additional locales with asc.

@@ -1,0 +1,1 @@
+Use when measuring Xcode clean or incremental build times, setting a baseline, or comparing before and after a build change.

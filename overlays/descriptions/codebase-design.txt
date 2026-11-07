@@ -1,0 +1,1 @@
+Use when deepening a module, designing its interface, choosing a seam, improving testability or AI navigation, or applying shared deep-module vocabulary.

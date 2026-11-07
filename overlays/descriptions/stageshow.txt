@@ -1,0 +1,1 @@
+Use when building faux product UI for marketing: mocked app or browser windows, dashboards, phones, terminals, bento cards, or animated cursor walkthroughs (React, CSS).

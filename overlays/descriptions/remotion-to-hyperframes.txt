@@ -1,0 +1,1 @@
+Use when explicitly converting existing Remotion source into HyperFrames. A reference to Remotion or its visual style is not a port request.

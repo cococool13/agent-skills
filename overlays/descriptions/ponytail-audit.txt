@@ -1,0 +1,1 @@
+Use for a one-shot, read-only ranked quality report on a whole repo: bugs, security, load, untested risk, bloat. For fixes plus a PR use repo-upgrade.

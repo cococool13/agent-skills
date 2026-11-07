@@ -1,0 +1,1 @@
+Use when creating a navigable HyperFrames slide deck with fragments, branching, hotspots, presenter notes, or converting a page into an interactive deck.

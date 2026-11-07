@@ -1,0 +1,1 @@
+Use when Swift packages, SPM plugins, resolution time or module graph shape slow Xcode builds. Report-first; part of xcode-build-orchestrator.

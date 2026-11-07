@@ -1,0 +1,1 @@
+Use when reconciling App Store subscriptions or in-app purchases with RevenueCat products, entitlements, offerings, and packages.

@@ -15,7 +15,7 @@ Adapt paths and schedule names to your machine. The table below is how the autho
 | --- | --- | --- |
 | Personal skills | `cococool13/agent-skills` → `~/.agents/skills` | manual `skills update <name>` |
 | Upstream skills | emilkowalski, vercel-labs, uizze, citrolabs, etc. | pinned `ref` (commit sha) in the lock; weekly job applies pinned entries only |
-| Local overlays | `~/.agents/skill-overlays/` | `post-update-patches.py` after every update |
+| Local overlays | `~/.agents/skill-overlays/` (`descriptions/` links to this repo's `overlays/descriptions/`) | `post-update-patches.py` after every update |
 
 Weekly (Monday 10:00): LaunchAgent `com.cococool.skills-update` runs `scripts/update-skills.sh`
 from `~/Projects/Agent Skills/skills/maintain-skill-library/` with the pinned CLI in
