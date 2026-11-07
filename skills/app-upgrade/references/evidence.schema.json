@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://local.invalid/app-upgrade/evidence.schema.json",
-  "title": "app-upgrade findings",
+  "$id": "https://local.invalid/upgrade/evidence.schema.json",
+  "title": "upgrade findings",
   "type": "object",
   "required": ["schemaVersion", "findings"],
   "additionalProperties": false,

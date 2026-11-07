@@ -11,6 +11,12 @@ echo '== Skill frontmatter and listing budget'
 # Home entrypoints are machine state, not repo content: a bare audit-context.py checks them.
 python3 skills/maintain-skill-library/scripts/audit-context.py --root skills --overlays .ci-none --lock .ci-none --rules .ci-none --agents-md AGENTS.md --listing-root skills --skip-home-entrypoints
 
+echo '== Description overlays: one "Use ..." line, at most 220 characters'
+for f in overlays/descriptions/*.txt; do
+  line=$(head -1 "$f")
+  [ "$(wc -l <"$f" | tr -d ' ')" = 1 ] && [ ${#line} -le 220 ] && [ "${line#Use}" != "$line" ] || { echo "bad overlay: $f"; exit 1; }
+done
+
 echo '== Audit tests'
 python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_context_audit.py'
 
@@ -25,3 +31,17 @@ echo '== Upgrade skill fingerprint boundary'
 python3 -m unittest discover -s skills/app-upgrade/scripts -p 'test_*.py'
 python3 -m unittest discover -s skills/mac-app-upgrade/scripts -p 'test_*.py'
 python3 -m unittest discover -s skills/website-upgrade/scripts -p 'test_*.py'
+
+echo '== Upgrade skills: package checks and shared-file drift'
+# Each skill installs on its own, so shared helpers are copied, not imported. Keep the copies identical.
+for s in app-upgrade website-upgrade mac-app-upgrade; do
+  out=$(python3 "skills/$s/scripts/validate_skill.py") || { echo "$out"; exit 1; }
+done
+for f in scripts/parse_invocation.py scripts/fingerprint_run.py scripts/validate_findings.py scripts/validate_skill.py scripts/test_fingerprint_run.py references/evidence.schema.json; do
+  for s in website-upgrade mac-app-upgrade; do
+    cmp -s "skills/app-upgrade/$f" "skills/$s/$f" || { echo "drift: skills/$s/$f differs from app-upgrade"; exit 1; }
+  done
+done
+# A misspelled --implement must never turn on mutation.
+python3 skills/app-upgrade/scripts/parse_invocation.py -- --impl | grep -q '"mode": "report-only"' || { echo 'parse_invocation: --impl enabled implement mode'; exit 1; }
+echo 'upgrade skills ok'
