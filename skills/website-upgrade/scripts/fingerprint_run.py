@@ -2,10 +2,10 @@
 """Fingerprint a target checkout so resume can detect stale evidence.
 
 Records commit, branch, a dirty-tree digest, and a config digest.
-Does not print file contents. Secret-looking paths contribute path,
-size, and mtime only — not a content hash. Symlinks are followed only
-when the target stays inside the checkout; external targets are not
-opened or content-hashed.
+Does not print file contents. Secret-looking regular files contribute
+path, size, and mtime only — not a content hash. Symlinks are not
+followed: a link, a chain, or a path reached through a linked directory
+is marked and its target is not opened or content-hashed.
 """
 
 from __future__ import annotations
@@ -74,23 +74,62 @@ def looks_secret(path: Path) -> bool:
     return path.suffix.lower() in SECRET_SUFFIXES
 
 
+def _mark(kind: str, path: Path) -> str:
+    return hashlib.sha256(f"{kind}:{path.as_posix()}".encode()).hexdigest()
+
+
 def _resolves_inside(repo: Path, path: Path) -> bool:
     """True when path resolves inside repo. Does not read file contents."""
     try:
         path.resolve().relative_to(repo.resolve())
-    except (OSError, ValueError):
+    except (OSError, RuntimeError, ValueError):
         return False
     return True
 
 
-def digest_file(repo: Path, path: Path) -> str:
-    # Follow a symlink only when its target stays inside the checkout.
-    # An external target is not opened or content-hashed; the link path is marked.
+def _symlink_component(repo: Path, path: Path) -> bool:
+    """True when path or a checkout ancestor is a symlink. Errors fail closed."""
     try:
-        if path.is_symlink() and not _resolves_inside(repo, path):
-            return hashlib.sha256(f"outside-symlink:{path.as_posix()}".encode()).hexdigest()
+        root = repo.resolve()
+        current = path if path.is_absolute() else root / path
+        while True:
+            if current.is_symlink():
+                return True
+            if current == root:
+                return False
+            parent = current.parent
+            if parent == current:
+                return False
+            try:
+                parent.relative_to(root)
+            except ValueError:
+                return False
+            current = parent
+    except (OSError, RuntimeError):
+        return True
+
+
+def _is_recordable(path: Path) -> bool:
+    """True for a regular file or any symlink. Does not follow the link."""
+    try:
+        return path.is_symlink() or path.is_file()
     except OSError:
-        return hashlib.sha256(f"unreadable:{path.as_posix()}".encode()).hexdigest()
+        return True
+
+
+def digest_file(repo: Path, path: Path) -> str:
+    # Fail closed. A symlink, a chain, or a path under a linked directory is
+    # marked and not opened. The alias name is not used to decide that the
+    # target is safe to read.
+    try:
+        through_link = _symlink_component(repo, path)
+        inside = _resolves_inside(repo, path)
+    except (OSError, RuntimeError):
+        return _mark("unreadable", path)
+    if not inside:
+        return _mark("outside-symlink", path)
+    if through_link:
+        return _mark("symlink", path)
     if looks_secret(path):
         try:
             st = path.stat()
@@ -114,7 +153,7 @@ def dirty_digest(repo: Path) -> tuple[str, list[str], bool]:
         names = sorted(
             p.relative_to(repo).as_posix()
             for p in repo.rglob("*")
-            if p.is_file() and ".git" not in p.parts
+            if _is_recordable(p) and ".git" not in p.parts
         )[:400]
         h = hashlib.sha256()
         listed: list[str] = []
@@ -136,7 +175,7 @@ def dirty_digest(repo: Path) -> tuple[str, list[str], bool]:
             rel = rel.split(" -> ", 1)[1]
         names.append(rel)
         path = repo / rel
-        if path.is_file():
+        if _is_recordable(path):
             h.update(b"\n")
             h.update(rel.encode())
             h.update(b"\0")
@@ -149,7 +188,7 @@ def config_hash(repo: Path) -> str:
     found = 0
     for name in CONFIG_CANDIDATES:
         path = repo / name
-        if path.is_file():
+        if _is_recordable(path):
             found += 1
             h.update(name.encode())
             h.update(b"\0")
