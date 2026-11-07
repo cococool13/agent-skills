@@ -1,6 +1,6 @@
 ---
 name: website-upgrade
-description: "Audits and locally hardens an existing website or web property for journeys, conversion, accessibility, design, performance, SEO, security, and resilience. Use when asked to upgrade, review, harden, or quality-pass a marketing site, CMS or Webflow site, SPA or SSR app, or Worker/API. Defaults to report-only. For iPhone apps use app-upgrade; for Mac apps use mac-app-upgrade. Do not use for greenfield sites, one-line copy tweaks, deploy, publish, live form submits, production probing, or opening a pull request unless the user named that action."
+description: "Use when auditing or hardening an existing website, web app, or Worker/API: journeys, conversion, a11y, perf, SEO, headers. Report-only by default. Do not use for iOS or Mac apps, new sites, or deploys."
 argument-hint: "[path or area] [--report-only | --implement] [--quick | --standard | --deep]"
 compatibility: "Works from a local checkout with a shell and the project's own toolchain. Portable markdown for Claude Code, Codex, and similar agents. Optional companion skills are used only if already installed. Browser automation uses a host-provided adapter only."
 ---

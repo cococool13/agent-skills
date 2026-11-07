@@ -1,13 +1,13 @@
 ---
 name: app-upgrade
-description: "Audits and locally hardens an existing app or repository for correctness, security, architecture, user flows, implicit state machines, design, performance, and agent-proofing. Use when asked to upgrade, thoroughly test, harden, detangle, review journeys, or run a whole-repo quality or security pass. Defaults to report-only. For a Mac app use mac-app-upgrade; for a website or Worker use website-upgrade. Do not use for greenfield apps, one-line typo fixes, deploy, publish, live billing, production probing, or opening a pull request unless the user named that action."
+description: "Use when auditing or hardening an existing iOS app: journeys, state machines, StoreKit, security, design, perf. Report-only by default. Do not use for Mac apps, websites, or repo-wide fix-and-PR runs (repo-upgrade)."
 argument-hint: "[path or area] [--report-only | --implement] [--quick | --standard | --deep]"
 compatibility: "Works from a local repo checkout with a shell and the project's own toolchain. Portable markdown for Claude Code, Codex, and similar agents. Optional companion skills are used only if already installed."
 ---
 
 # App upgrade
 
-Leave the product more correct, safer, clearer, and harder to change wrongly. This is a workflow, not a promise of zero bugs or a complete review of every file.
+Leave the iPhone app more correct, safer, clearer, and harder to change wrongly. For a repo-wide fix-and-PR run use `repo-upgrade`; for Mac apps `mac-app-upgrade`; for websites and Workers `website-upgrade`. This is a workflow, not a promise of zero bugs or a complete review of every file.
 
 Read this file first. Load a `references/` file only when that phase or module starts. If `references/` sits next to this file, use it. If this body was installed without siblings, the caller must give the absolute path to the portable `app-upgrade` folder. Do not invent missing files or companion commands.
 

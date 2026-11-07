@@ -1,6 +1,6 @@
 ---
 name: preship-four-personas
-description: "Use before shipping any customer-facing surface (landing, pricing, feature announcement, ad, launch email, onboarding copy, App Store or marketing site, Workers/Pages site): a review-only Customer / Competitor / Skeptic / Conversion pass on messaging and positioning. Runs next to launch-qa-five-personas (Roundtable); both must pass."
+description: "Use before shipping customer-facing copy or pages (landing, pricing, App Store, launch email): Customer, Competitor, Skeptic and Conversion review of messaging. Pairs with launch-qa-five-personas."
 ---
 
 # Pre-ship 4-persona review
