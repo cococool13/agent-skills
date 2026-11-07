@@ -30,6 +30,7 @@ Update later: `npx skills update -g <name>` after reviewing the change
 | --- | --- | --- |
 | A new app or site, done right | “Start a new build for …” | [`new-build-recipe`](skills/new-build-recipe/SKILL.md) |
 | A whole-repo audit and cleanup PR | “Run repo-upgrade on this repo” | [`repo-upgrade`](skills/repo-upgrade/SKILL.md) |
+| An audit of one iPhone app, Mac app or website | “Audit this iOS app / Mac app / site” | [`app-upgrade`](skills/app-upgrade/SKILL.md) · [`mac-app-upgrade`](skills/mac-app-upgrade/SKILL.md) · [`website-upgrade`](skills/website-upgrade/SKILL.md) |
 | To put it live | “Ship this to Cloudflare” | [`ship`](skills/ship/SKILL.md) · [`deploy-cloudflare`](skills/deploy-cloudflare/SKILL.md) |
 
 You usually don’t type the skill name. Just describe the job.
@@ -45,6 +46,14 @@ You usually don’t type the skill name. Just describe the job.
 - [`deploy-cloudflare`](skills/deploy-cloudflare/SKILL.md) — Deploy to Cloudflare Pages or Workers
 - [`gitleaks-preflight`](skills/gitleaks-preflight/SKILL.md) — Unblock commits when secret scanners fail
 - [`repo-upgrade`](skills/repo-upgrade/SKILL.md) — Full repo audit + fix: ponytail, Cloudflare security-audit, scanners, one draft PR
+
+### Audit and harden
+
+`repo-upgrade` fixes any repo and opens one PR. The three below audit one kind of product, report-only unless you pass `--implement`, and never push.
+
+- [`app-upgrade`](skills/app-upgrade/SKILL.md) — iPhone/iOS app: journeys, state machines, StoreKit, security, design
+- [`mac-app-upgrade`](skills/mac-app-upgrade/SKILL.md) — Mac app: concurrency, persistence, permissions, signing, Sparkle updates
+- [`website-upgrade`](skills/website-upgrade/SKILL.md) — Website, web app or Worker: journeys, conversion, accessibility, performance, SEO, headers
 
 ### Agent setup
 
