@@ -1,0 +1,1 @@
+Use when Cohen runs /ship or asks to commit, push, and deploy the current repo only.

@@ -1,0 +1,1 @@
+Use when creating editable local Tesseract motion graphics, typography, diagrams, lower thirds, or footage overlays; use tesseract-video for a complete edit.

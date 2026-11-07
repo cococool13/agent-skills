@@ -1,6 +1,6 @@
 ---
 name: launch-qa-five-personas
-description: "Use before any web launch, public deploy, or big landing-page change: five simulated first-time visitors test the real deployed or preview site in a real browser and return a ranked findings table with a pass/fail verdict."
+description: "Use before a web launch or big landing-page change: five first-time-visitor agents test the deployed or preview site in a browser and return ranked findings with pass/fail."
 argument-hint: "<live or preview URL> [success goal]"
 ---
 

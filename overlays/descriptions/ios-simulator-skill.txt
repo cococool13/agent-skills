@@ -1,0 +1,1 @@
+Use for simulator jobs MobileBuildMCP lacks: privacy grants, push payloads, log streaming, hang watch, screenshot visual diff. Not for build, test, tap, type or screenshots.

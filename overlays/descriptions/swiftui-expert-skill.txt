@@ -1,0 +1,1 @@
+Use when writing, reviewing or refactoring SwiftUI for iOS or macOS: state and @Observable, layout, lists, navigation, animation, Liquid Glass, large-display layouts, API migration.

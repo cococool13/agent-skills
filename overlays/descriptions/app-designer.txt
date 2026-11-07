@@ -1,0 +1,1 @@
+Use when designing or redesigning iPhone app screens, iOS UI mockups, or SwiftUI visual direction. For screenshot export and store upload, use the App Store screenshot skills.

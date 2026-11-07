@@ -1,0 +1,1 @@
+Use when cloning a section, widget, page or animation from a URL, video, gif or Lottie into the codebase and verifying it frame by frame (CSS, JS, canvas, WebGL, three.js).

@@ -1,0 +1,1 @@
+Use when discovering, downloading, and verifying App Store Connect Analytics reports, instances, processing dates, segments, sizes, and MD5 checksums.

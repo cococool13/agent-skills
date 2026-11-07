@@ -1,0 +1,1 @@
+Use when localizing subscription, group, or in-app purchase display names and descriptions across App Store locales through asc.

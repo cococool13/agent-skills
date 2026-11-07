@@ -1,0 +1,1 @@
+Use when writing localized App Store What's New notes from git log, bullets, or notes under ./metadata.

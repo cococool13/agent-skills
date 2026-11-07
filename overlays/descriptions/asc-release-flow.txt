@@ -1,0 +1,1 @@
+Use when preparing or executing an App Store release with asc: stage a version, build/upload, publish, or submit when explicitly authorized.

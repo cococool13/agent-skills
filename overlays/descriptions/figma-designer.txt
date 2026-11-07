@@ -1,0 +1,1 @@
+Use before any use_figma call that creates, edits or reviews a Figma file: screens, components, tokens, variables, auto layout, or a figma.com link.

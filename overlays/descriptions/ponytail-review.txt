@@ -1,0 +1,1 @@
+Use when reviewing a diff, commit or PR for logic, safety, load, tests and needless lines. Review only; for Cohen's PR merge flow use review.

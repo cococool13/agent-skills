@@ -1,0 +1,1 @@
+Use when submitting to the App Store, handling a rejection or appeal, privacy manifests, age ratings, export compliance, Xcode Cloud, or TestFlight crash triage.

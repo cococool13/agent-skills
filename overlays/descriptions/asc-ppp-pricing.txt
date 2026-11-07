@@ -1,0 +1,1 @@
+Use when setting localized subscription or in-app purchase prices by territory, including PPP strategies and asc price schedules/imports.

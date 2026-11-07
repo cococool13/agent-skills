@@ -1,0 +1,1 @@
+Use when adding named visual effects, treatments, components, or transitions to HyperFrames. Search the registry before building a named look by hand.
