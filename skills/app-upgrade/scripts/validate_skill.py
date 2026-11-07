@@ -84,6 +84,7 @@ def main() -> int:
         "PUBLIC-SOURCES.md",
         "scripts/validate_skill.py",
         "scripts/fingerprint_run.py",
+        "scripts/parse_invocation.py",
         "scripts/check_adapters.py",
         "scripts/validate_findings.py",
         "references/01-inventory-baseline.md",

@@ -36,7 +36,7 @@ Do not open secret files. Record that a secret-looking path exists without print
 
 Run only the project's documented gates (test, lint, typecheck, build). Record command and counts in `evidence.md` (or `baseline.md` if the output is long). A static marketing folder with no test script gets one line: `no documented local gate`, not a fake suite.
 
-If dependencies are missing, ask before installing. Otherwise record `needs <toolchain>`. Do not claim an unrun check passed. Later work must not make recorded counts worse.
+If dependencies are missing, run the repo's own lockfile install (`npm ci`, `pnpm install --frozen-lockfile`, and so on) when house rules allow project-local installs; otherwise ask. Never install globally or update a lockfile to make a gate run. Otherwise record `needs <toolchain>`. Do not claim an unrun check passed. Later work must not make recorded counts worse.
 
 ## Stop
 

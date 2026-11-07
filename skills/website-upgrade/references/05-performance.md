@@ -20,6 +20,7 @@ Rules for this skill:
 - Use lab traces to debug a named journey on a stated network/device profile (for example "slow 4G, mid-tier phone"), not as a vanity score.
 - Do not treat Lighthouse 100 as a goal. Do not report a lab LCP as "the site's LCP."
 - Lighthouse cannot measure INP (no user). Total Blocking Time is only a lab proxy.
+- Lab command, local or preview URL only: `npx --yes lighthouse@12.8.2 <url> --only-categories=performance --form-factor=mobile --output=json --output-path=<run>/lh-perf.json --chrome-flags=--headless=new`. Record the throttling profile it used.
 - Name the source, the URL or page group, the percentile, and the device class for every number you cite.
 
 ## Budgets and costs

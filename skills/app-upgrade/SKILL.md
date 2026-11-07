@@ -14,6 +14,7 @@ Read this file first. Load a `references/` file only when that phase or module s
 Relative paths below are from the skill root. Run helpers; do not load their source unless you are changing them:
 
 - `python3 scripts/validate_skill.py` — check this package's frontmatter and reference links
+- `python3 scripts/parse_invocation.py -- $ARGUMENTS` — classify mode, depth, unknown flags
 - `python3 scripts/fingerprint_run.py <repo> --out <run>/run-meta.json` — fingerprint the target so resume can detect stale evidence
 - `python3 scripts/check_adapters.py --out <run>/adapters.json` — which optional adapters and tools exist here, and how to call each
 - `python3 scripts/validate_findings.py <run>/findings.json` — check findings against the evidence contract before reporting
@@ -22,15 +23,21 @@ Arguments: `$ARGUMENTS`. A path or area narrows every phase.
 
 ## Parse arguments
 
+Run `parse_invocation.py` on `$ARGUMENTS` and obey its `mode`, `depth`, `scopedPath`, `unknownFlags`, and `suspiciousSafetyFlags`. Merge the JSON into `run-meta.json`.
+
 | Input | What to do |
 | --- | --- |
 | No mode flag | Report-only |
+| Exact `--implement` or `--implement-locally` | Implement-locally. That flag is enough; do not also require the word "fix" |
+| Natural-language fix/apply/implement and no safety-flag problem | Implement-locally |
 | `--report-only` and `--implement` together | Report-only, and note the conflict |
-| `--implement` | Implement-locally only if the user also asked to fix or apply changes |
-| `--quick`, `--standard` (default), `--deep` | See depth table |
-| `--deep` with no budget | State a sitting budget before starting; leftover work is listed, not invented |
-| Unknown flag | Ignore it, record it in `run-meta.json`, continue with defaults |
-| Missing toolchain later | Record the gap; do not claim unrun checks passed |
+| Unknown flag | Record it. Continue with defaults |
+| Flag that looks like a misspelled `--implement` (`--impl`, `--implment`) | Report-only. Do not enable mutation |
+| Flag that looks like a misspelled `--report-only` | Report-only |
+| `--deep` with no budget | State a sitting budget first; leftover work is listed, not invented |
+| Missing toolchain later | Record the gap; do not claim an unrun check passed |
+
+A misspelled safety flag never silently turns on implement mode, even if other words look like a fix request.
 
 ## Modes and depth
 
@@ -39,7 +46,7 @@ Safety and shipping rules are low-freedom: follow them exactly. How to redesign 
 | Mode | When | Freedom |
 | --- | --- | --- |
 | Report-only (default) | Audit, review, research, or list problems | Do not edit product code. You may run existing gates. Write findings and proposed guards in the run folder |
-| Implement-locally | User asked to fix or apply changes | New branch from the current one. Add guards in the repo. No push, PR, merge, deploy, publish, live migration, production traffic, or live billing |
+| Implement-locally | Exact `--implement` or a clear ask to apply fixes | New branch from the current one. Add guards in the repo. No push, PR, merge, deploy, publish, live migration, production traffic, or live billing |
 
 | Depth | Do | Stop |
 | --- | --- | --- |

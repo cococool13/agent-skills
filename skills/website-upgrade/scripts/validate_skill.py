@@ -78,6 +78,8 @@ def main() -> int:
         "scripts/validate_skill.py",
         "scripts/fingerprint_run.py",
         "scripts/parse_invocation.py",
+        "scripts/check_adapters.py",
+        "scripts/validate_findings.py",
         "references/evidence.schema.json",
     ]
     for rel in required:

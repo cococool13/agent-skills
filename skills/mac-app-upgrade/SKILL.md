@@ -1,6 +1,6 @@
 ---
 name: mac-app-upgrade
-description: "Audits and locally hardens an existing Mac app for correctness, concurrency, persistence, permissions, accessibility, performance, distribution, and update security. Use when asked to upgrade, review, harden, or quality-pass a SwiftUI or AppKit app, menu bar extra, or Mac utility. Defaults to report-only and infers Developer ID versus Mac App Store from the project. Do not use for greenfield apps, one-line typo fixes, notarization submission, tccutil reset, deploy, publish, or opening a pull request unless the user named that action."
+description: "Audits and locally hardens an existing Mac app for correctness, concurrency, persistence, permissions, accessibility, performance, distribution, and update security. Use when asked to upgrade, review, harden, or quality-pass a SwiftUI or AppKit app, menu bar extra, or Mac utility. Defaults to report-only and infers Developer ID versus Mac App Store from the project. For iPhone apps or general repos use app-upgrade. Do not use for greenfield apps, one-line typo fixes, notarization submission, tccutil reset, deploy, publish, or opening a pull request unless the user named that action."
 argument-hint: "[path or area] [--report-only | --implement] [--quick | --standard | --deep]"
 compatibility: "Works from a local Mac app checkout with a shell and the project's own toolchain. Portable markdown for Claude Code, Codex, and similar agents. Optional companion skills are used only if already installed."
 ---
@@ -16,6 +16,8 @@ Relative paths are from the skill root. Run helpers; do not load their source un
 - `python3 scripts/parse_invocation.py -- $ARGUMENTS` — classify mode, depth, unknown flags
 - `python3 scripts/fingerprint_run.py <repo> --out <run>/run-meta.json`
 - `python3 scripts/validate_skill.py` — check this package
+- `python3 scripts/check_adapters.py --out <run>/adapters.json` — which optional adapters and tools exist here, and how to call each
+- `python3 scripts/validate_findings.py <run>/findings.json` — check findings against the evidence contract before reporting
 
 ## Parse arguments
 
@@ -79,7 +81,7 @@ A fix that fails twice is stopped. Save the attempted diff and failing output, t
 
 Create `~/.mac-app-upgrade/<repo>/run-<N>/` (or `.mac-app-upgrade/run-<N>/` in scratch if home is not writable). Never write run output into the target repo.
 
-At start, run `fingerprint_run.py` and write `run-meta.json`. On resume, rerun it. If commit, dirty digest, scoped path, or config hash changed, mark earlier checkpoints `STALE` and redo affected checks.
+At start, run `fingerprint_run.py` and write `run-meta.json`, then `check_adapters.py`. On resume, rerun it. If commit, dirty digest, scoped path, or config hash changed, mark earlier checkpoints `STALE` and redo affected checks.
 
 ## Artifact and evidence contract
 
@@ -122,15 +124,26 @@ Root cause belongs in `evidence.md`: name the shared cause once. Do not sleep-fo
 
 ## Optional adapters
 
-If one of these is installed, use it. If it is missing, keep going. Never invent `/pstack` or a notarization-submit command.
+Use an adapter only if `adapters.json` lists it; otherwise keep going. Never fake a missing one. `use` says how:
 
-| Need | Use if present |
+- `skill` — call it with the Skill tool.
+- `read-file` — installed but slash-only (pstack sets `disable-model-invocation`). Read the SKILL.md at `path` and follow it yourself; do not try the Skill tool.
+- `missing` — skip, and note the gap in `evidence.md`.
+
+| Need | Adapter |
 | --- | --- |
-| House whole-repo conductor | `repo-upgrade` in audit-only mode; still run applicable Mac modules; still no implicit PR or ship |
-| State machines as TLA+ / chart | `statechart` |
-| Fresh local claim check | `verify-this` |
+| House whole-repo conductor | `repo-upgrade --audit-only`; still run applicable Mac modules; still no implicit PR or ship |
+| Security lane | `security-audit` (module 10 still owns IPC, Keychain, and URL schemes) |
+| SwiftUI, concurrency, SwiftData, Swift Testing | `swiftui-expert-skill`, `swift-concurrency`, `swiftdata-pro`, `swift-testing-pro` |
+| Accessibility, StoreKit | `axiom-accessibility`, `axiom-storekit` |
+| Slow builds | `xcode-build-orchestrator` (report only; its fixes need the user's approval) |
+| Model-check a high-rank machine | `statechart` — run `statechartCommand` from `adapters.json`; needs `statechartReady: true` |
 | Diff blast radius | `blast-radius` |
-| Proven-by-run review | `interrogate` |
+| Review the implement-mode diff | `ponytail-review` |
+| Fail-then-pass fixes | `tdd` |
+| Multi-agent adversarial review | `interrogate`, `arena` — they spawn many agents; use only if the user named them, otherwise suggest `/pstack:interrogate` in the report |
+
+Never invent a notarization-submit command.
 
 ## Stop and report
 
@@ -138,4 +151,4 @@ Stop when the chosen depth's applicable gates are met, the stated budget is spen
 
 Lead with the outcome and the one thing the owner must do. Then findings by area, each with a case and evidence type. Then decisions. Then what was not checked.
 
-In implement mode, commit only if the user asked for commits, in small themed batches on the new branch.
+In implement mode, commit only if the user asked for commits, in small themed batches on the new branch. Each fixed bug names its guard on a `Rule:` line (test or lint name, or `Rule: none (<reason>)` for typos).

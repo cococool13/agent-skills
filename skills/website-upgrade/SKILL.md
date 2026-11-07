@@ -1,6 +1,6 @@
 ---
 name: website-upgrade
-description: "Audits and locally hardens an existing website or web property for journeys, conversion, accessibility, design, performance, SEO, security, and resilience. Use when asked to upgrade, review, harden, or quality-pass a marketing site, CMS or Webflow site, SPA or SSR app, or Worker/API. Defaults to report-only. Do not use for greenfield sites, one-line copy tweaks, deploy, publish, live form submits, production probing, or opening a pull request unless the user named that action."
+description: "Audits and locally hardens an existing website or web property for journeys, conversion, accessibility, design, performance, SEO, security, and resilience. Use when asked to upgrade, review, harden, or quality-pass a marketing site, CMS or Webflow site, SPA or SSR app, or Worker/API. Defaults to report-only. For iPhone apps use app-upgrade; for Mac apps use mac-app-upgrade. Do not use for greenfield sites, one-line copy tweaks, deploy, publish, live form submits, production probing, or opening a pull request unless the user named that action."
 argument-hint: "[path or area] [--report-only | --implement] [--quick | --standard | --deep]"
 compatibility: "Works from a local checkout with a shell and the project's own toolchain. Portable markdown for Claude Code, Codex, and similar agents. Optional companion skills are used only if already installed. Browser automation uses a host-provided adapter only."
 ---
@@ -16,6 +16,8 @@ Relative paths are from the skill root. Run helpers; do not load their source un
 - `python3 scripts/parse_invocation.py -- $ARGUMENTS` — classify mode, depth, unknown flags
 - `python3 scripts/fingerprint_run.py <repo> --out <run>/run-meta.json`
 - `python3 scripts/validate_skill.py` — check this package
+- `python3 scripts/check_adapters.py --out <run>/adapters.json` — which optional adapters and tools exist here, and how to call each
+- `python3 scripts/validate_findings.py <run>/findings.json` — check findings against the evidence contract before reporting
 
 ## Parse arguments
 
@@ -76,7 +78,7 @@ A fix that fails twice is stopped. Save the attempted diff and failing output, t
 
 Create `~/.website-upgrade/<repo>/run-<N>/` (or `.website-upgrade/run-<N>/` in scratch if home is not writable). Never write run output into the target repo.
 
-At start, run `fingerprint_run.py` and write `run-meta.json`. On resume, rerun it. If commit, dirty digest, scoped path, or config hash changed, mark earlier checkpoints `STALE` and redo affected checks.
+At start, run `fingerprint_run.py` and write `run-meta.json`, then `check_adapters.py`. On resume, rerun it. If commit, dirty digest, scoped path, or config hash changed, mark earlier checkpoints `STALE` and redo affected checks.
 
 ## Artifact and evidence contract
 
@@ -119,16 +121,25 @@ Root cause belongs in `evidence.md`: name the shared cause once. Do not sleep-fo
 
 ## Optional adapters
 
-If one of these is installed, use it. If it is missing, keep going. Never invent `/pstack` or a browser-driver command.
+Use an adapter only if `adapters.json` lists it; otherwise keep going. Never fake a missing one. `use` says how:
 
-| Need | Use if present |
+- `skill` — call it with the Skill tool.
+- `read-file` — installed but slash-only (pstack sets `disable-model-invocation`). Read the SKILL.md at `path` and follow it yourself; do not try the Skill tool.
+- `missing` — skip, and note the gap in `evidence.md`.
+
+| Need | Adapter |
 | --- | --- |
-| House whole-repo conductor | `repo-upgrade` in audit-only mode; still run applicable website modules; still no implicit PR |
-| State machines as TLA+ / chart | `statechart` |
-| Fresh local claim check | `verify-this` |
+| House whole-repo conductor | `repo-upgrade --audit-only`; still run applicable website modules; still no implicit PR |
+| Security lane | `security-audit` (module 07 still owns BOLA, webhooks, and headers) |
+| UI and accessibility review | `web-design-guidelines`, `impeccable` |
+| Lab accessibility and performance | Lighthouse via `npx --yes lighthouse@12.8.2` on local or preview URLs only (needs Chrome; its accessibility category runs axe-core) |
+| Host browser or UI flow | The host's own browser: in Claude Code the built-in browser pane or Playwright MCP; on Grok Bot, desktop/browser. Do not write a shell CDP recipe |
+| Model-check a high-rank machine | `statechart` — run `statechartCommand` from `adapters.json`; needs `statechartReady: true` |
 | Diff blast radius | `blast-radius` |
-| Proven-by-run review | `interrogate` |
-| Host browser or UI flow | Whatever browser adapter this host already provides. On Grok Bot, desktop/browser is the permitted automation path. Do not write a shell CDP recipe |
+| Review the implement-mode diff | `ponytail-review` |
+| Fail-then-pass fixes | `tdd` |
+| Multi-agent adversarial review | `interrogate`, `arena` — they spawn many agents; use only if the user named them, otherwise suggest `/pstack:interrogate` in the report |
+| Pre-launch persona QA | `launch-qa-five-personas`, `preship-four-personas` — multi-agent and launch-scoped; recommend, do not run, unless the user named them |
 
 CMS, Webflow, or Cloudflare helpers are likewise optional and stay read-only unless implement mode and the user named the change.
 
@@ -138,4 +149,4 @@ Stop when the chosen depth's applicable gates are met, the stated budget is spen
 
 Lead with the outcome and the one thing the owner must do. Then findings by area, each with a case and evidence type. Then decisions. Then what was not checked.
 
-In implement mode, commit only if the user asked for commits, in small themed batches on the new branch.
+In implement mode, commit only if the user asked for commits, in small themed batches on the new branch. Each fixed bug names its guard on a `Rule:` line (test or lint name, or `Rule: none (<reason>)` for typos).

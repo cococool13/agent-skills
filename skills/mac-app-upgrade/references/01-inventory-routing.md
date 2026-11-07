@@ -38,7 +38,7 @@ Supported macOS versions and architectures come from deployment target, `Info.pl
 
 ## Baseline
 
-Run documented `xcodebuild` or SwiftPM test/build commands if the toolchain is here. If Xcode is missing, write `needs Xcode` and continue with static reading. Do not invent a second suite. Do not run against the user's installed copy of the app in `/Applications`.
+Run documented `xcodebuild` or SwiftPM test/build commands if the toolchain is here. Resolve packages with the repo's own pins (`xcodebuild -resolvePackageDependencies` or `swift package resolve`); never update `Package.resolved` or install global tools to make a gate run. If the repo configures `swiftlint` or `periphery`, run them and treat hits as leads, not findings. If Xcode is missing, write `needs Xcode` and continue with static reading. Do not invent a second suite. Do not run against the user's installed copy of the app in `/Applications`.
 
 ## Stop
 

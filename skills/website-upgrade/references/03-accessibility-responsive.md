@@ -10,6 +10,8 @@ Open for any user-facing page. WCAG 2.2 (W3C Recommendation, 5 October 2023) add
 | Manual keyboard | Tab order, focus visible, no keyboard trap, focus not entirely hidden | Spoken output |
 | Manual VoiceOver / screen reader | Name, role, value, live regions | Every OS/browser pairing unless you list them |
 
+Automated pass, local or preview URLs only: `npx --yes lighthouse@12.8.2 <url> --only-categories=accessibility --output=json --output-path=<run>/lh-a11y.json --chrome-flags=--headless=new`. Lighthouse runs axe-core, so no separate axe install is needed. Failing audits (`score: 0`) are leads to confirm in the page, not findings on their own.
+
 Say which tools ran and which journeys were walked by keyboard. A green automated score with no keyboard pass is incomplete, not a pass.
 
 ## WCAG 2.2 checks that agents miss

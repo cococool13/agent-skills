@@ -6,7 +6,7 @@ Inventory implicit state in the scoped area: checkout steps, auth sessions, cook
 
 A model check proves the model, for the states explored, under your constants. Replay counterexamples against the code. Say which rules were not checked.
 
-If `statechart` is installed, use it on high-rank machines. If it is missing, continue here.
+If `adapters.json` lists `statechart`, use it on high-rank machines; otherwise continue here. It is slash-only, so follow its SKILL.md (path in `adapters.json`). Write the spec in the run folder, never the repo, and run `<statechartCommand> Spec.tla --config Spec.cfg --out <run>/models/<machine>`. The first run fetches TLC and Java through `mise` and needs the network. A spec that uses `+`, `<`, or `<=` must `EXTENDS Naturals`; without it SANY dies with a `NullPointerException`, not a readable parse error.
 
 ## Guards
 
@@ -20,11 +20,11 @@ Independent review means a different person or agent that has not seen your conc
 
 If two artifacts disagree, keep the weaker claim and note the contradiction. On resume, stale fingerprints make earlier findings `STALE`.
 
-If `verify-this` is installed, use its VERIFIED / NOT VERIFIED / INCONCLUSIVE labels; this skill's evidence types remain authoritative.
+When the platform has subagents, spawn the refuter as a fresh agent: give it the report or diff and the code, not your reasoning. That counts as independent review. This skill's evidence types stay authoritative whatever an adapter returns. Run `scripts/validate_findings.py <run>/findings.json` before the report; fix the file, not the validator.
 
 ## Browser automation
 
-Use a host-provided browser adapter if the host already has one. On Grok Bot, desktop/browser is the permitted path. Do not write shell CDP instructions, Playwright installers, or a homemade driver into reports as required steps.
+Use the host's own browser: in Claude Code, the built-in browser pane or Playwright MCP; on Grok Bot, desktop/browser. Local or preview URLs only; never submit a live form. Do not write shell CDP instructions, Playwright installers, or a homemade driver into reports as required steps.
 
 ## Roles (same run, different hats)
 
