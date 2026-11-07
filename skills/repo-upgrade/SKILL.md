@@ -1,6 +1,6 @@
 ---
 name: repo-upgrade
-description: "Use when asked to audit and upgrade a whole repo (bugs, security, speed, dead code, CI, agent-proofing) or /repo-upgrade. Runs ponytail + Cloudflare security-audit, verifies, fixes, ships one draft PR."
+description: "Use when asked to fix a whole repo end to end (bugs, security, speed, dead code, CI, agent-proofing) and ship one draft PR, or /repo-upgrade. For a report-only iOS, Mac or web audit use the *-upgrade skill."
 argument-hint: "[path or area] [--audit-only] [--quick | --deep] [--no-security]"
 license: MIT
 ---
