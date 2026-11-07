@@ -1,0 +1,1 @@
+Use when diagnosing or repairing App Store readiness, review blockers, invalid version states, stuck submissions, cancellations, or retry decisions with asc.

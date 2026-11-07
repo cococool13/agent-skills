@@ -10,3 +10,6 @@ __pycache__/
 
 # Maps one machine's permission setup; never publish it
 skills/ai-stack-audit/stackctl/stack.yaml
+
+# Agent session scratch
+.claude/

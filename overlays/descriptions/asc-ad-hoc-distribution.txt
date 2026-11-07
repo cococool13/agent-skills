@@ -1,0 +1,1 @@
+Use when publishing or resuming private registered-device iOS installs with asc, ad hoc profiles, caller-owned storage, and verified install links.

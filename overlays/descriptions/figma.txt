@@ -1,0 +1,1 @@
+Use when importing Figma assets, tokens, components, storyboards, or shaders into a HyperFrames motion composition. A reference URL alone is not a video brief.

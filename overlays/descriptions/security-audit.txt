@@ -1,0 +1,1 @@
+Use for security questions, focused vulnerability review, or an explicit full codebase audit or pen test. Runs the full workflow only when asked for one.

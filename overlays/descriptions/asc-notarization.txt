@@ -1,0 +1,1 @@
+Use when archiving, Developer ID signing, and notarizing a macOS app for distribution outside the App Store.

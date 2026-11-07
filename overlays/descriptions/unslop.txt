@@ -1,0 +1,1 @@
+Use when a UI looks AI-generated (purple gradients, glows, emoji labels, uneven spacing) and the user asks to unslop, polish or de-template it.

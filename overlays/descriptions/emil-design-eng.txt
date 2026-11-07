@@ -1,0 +1,1 @@
+Use when refining motion and interaction feel (easing, springs, transitions, gestures) after visual direction is set.

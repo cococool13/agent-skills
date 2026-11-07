@@ -1,0 +1,1 @@
+Use when automating iOS screenshots with build/run, simulator UI actions, capture plans, framing, and asc screenshot upload.

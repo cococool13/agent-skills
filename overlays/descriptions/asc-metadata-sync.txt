@@ -1,0 +1,1 @@
+Use when pulling, validating, or applying App Store metadata and localizations with asc, or migrating from fastlane.

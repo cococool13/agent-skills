@@ -1,0 +1,1 @@
+Use when retrieving live external data through Treg: SEO, search, social, company/contact enrichment, finance, or other supported provider endpoints.

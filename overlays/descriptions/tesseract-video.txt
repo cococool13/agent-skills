@@ -1,0 +1,1 @@
+Use when editing existing footage into a finished local Tesseract video: cuts, dialogue, sound design, audio mix, and useful graphic overlays.

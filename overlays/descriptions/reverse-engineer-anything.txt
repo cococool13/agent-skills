@@ -1,0 +1,1 @@
+Use when reverse engineering shipped binaries, apps, Electron, firmware or live web apps with REA, or building an AgentEnv bundle. Not for reading source repos.

@@ -1,0 +1,1 @@
+Use when investigating TestFlight crashes, beta feedback, hangs, disk writes, launch diagnostics, or build/app performance reports with asc.

@@ -1,0 +1,1 @@
+Use when adding React View Transitions: page and route transitions, shared elements, enter/exit, list reorder, or Next.js view transitions.

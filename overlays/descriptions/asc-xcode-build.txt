@@ -1,0 +1,1 @@
+Use when building, archiving, exporting, uploading, or managing Xcode versions/build numbers with asc for IPA, PKG, TestFlight, or registered-device installs.

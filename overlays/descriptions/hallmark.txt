@@ -1,0 +1,1 @@
+Use when building a new website or page, or when Hallmark is named. Apps stay with app-designer. Skip an existing page unless the prompt says /hallmark redesign.

@@ -1,0 +1,1 @@
+Use when building exportable App Store or Google Play marketing screenshot pages, device mockups, or a Next.js screenshot editor.

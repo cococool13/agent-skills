@@ -1,0 +1,1 @@
+Use when Swift compile or type-checking time is slow (long CompileSwiftSources, warn-long-function-bodies). Produces a source-level plan.
