@@ -3,7 +3,9 @@
 
 Records commit, branch, a dirty-tree digest, and a config digest.
 Does not print file contents. Secret-looking paths contribute path,
-size, and mtime only — not a content hash.
+size, and mtime only — not a content hash. Symlinks are followed only
+when the target stays inside the checkout; external targets are not
+opened or content-hashed.
 """
 
 from __future__ import annotations
@@ -72,7 +74,23 @@ def looks_secret(path: Path) -> bool:
     return path.suffix.lower() in SECRET_SUFFIXES
 
 
-def digest_file(path: Path) -> str:
+def _resolves_inside(repo: Path, path: Path) -> bool:
+    """True when path resolves inside repo. Does not read file contents."""
+    try:
+        path.resolve().relative_to(repo.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def digest_file(repo: Path, path: Path) -> str:
+    # Follow a symlink only when its target stays inside the checkout.
+    # An external target is not opened or content-hashed; the link path is marked.
+    try:
+        if path.is_symlink() and not _resolves_inside(repo, path):
+            return hashlib.sha256(f"outside-symlink:{path.as_posix()}".encode()).hexdigest()
+    except OSError:
+        return hashlib.sha256(f"unreadable:{path.as_posix()}".encode()).hexdigest()
     if looks_secret(path):
         try:
             st = path.stat()
@@ -104,7 +122,7 @@ def dirty_digest(repo: Path) -> tuple[str, list[str], bool]:
             listed.append(rel)
             h.update(rel.encode())
             h.update(b"\0")
-            h.update(digest_file(repo / rel).encode())
+            h.update(digest_file(repo, repo / rel).encode())
         return h.hexdigest(), listed, False
 
     porcelain = run_git(repo, "status", "--porcelain", "-uall")
@@ -122,7 +140,7 @@ def dirty_digest(repo: Path) -> tuple[str, list[str], bool]:
             h.update(b"\n")
             h.update(rel.encode())
             h.update(b"\0")
-            h.update(digest_file(path).encode())
+            h.update(digest_file(repo, path).encode())
     return h.hexdigest(), names, True
 
 
@@ -135,7 +153,7 @@ def config_hash(repo: Path) -> str:
             found += 1
             h.update(name.encode())
             h.update(b"\0")
-            h.update(digest_file(path).encode())
+            h.update(digest_file(repo, path).encode())
             h.update(b"\n")
     if found == 0:
         return "none"

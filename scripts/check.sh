@@ -20,3 +20,8 @@ echo '== Guard contract tests'
 echo '== repo-upgrade script self-tests'
 python3 skills/repo-upgrade/scripts/preflight.py --selftest
 python3 skills/repo-upgrade/scripts/scan.py --selftest
+
+echo '== Upgrade skill fingerprint boundary'
+python3 -m unittest discover -s skills/app-upgrade/scripts -p 'test_*.py'
+python3 -m unittest discover -s skills/mac-app-upgrade/scripts -p 'test_*.py'
+python3 -m unittest discover -s skills/website-upgrade/scripts -p 'test_*.py'
