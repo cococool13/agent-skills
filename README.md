@@ -61,6 +61,7 @@ You usually don’t type the skill name. Just describe the job.
 - [`canvas`](skills/canvas/SKILL.md) — Create or edit a `.canvas.tsx` artifact
 - [`maintain-skill-library`](skills/maintain-skill-library/SKILL.md) — Keep your skill library tidy
 - [`ai-stack-audit`](skills/ai-stack-audit/SKILL.md) — Audit agent instructions, skills, hooks, MCP setup and permissions
+- [`prompt-rewrite`](skills/prompt-rewrite/SKILL.md) — Rewrite a pasted prompt into a better one, without doing the task in it
 
 ### Launch and research
 
