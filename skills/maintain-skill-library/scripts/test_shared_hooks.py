@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -20,8 +21,10 @@ class SharedHookTests(unittest.TestCase):
     def decision(self, output):
         return output.get('hookSpecificOutput', {}).get('permissionDecision', output.get('permission', 'allow'))
 
-    def shell(self, command, host='codex'):
+    def shell(self, command, host='codex', cwd=None):
         data = {'hook_event_name': 'PreToolUse', 'tool_input': {'command': command}}
+        if cwd:
+            data['cwd'] = cwd
         if host == 'codex':
             data['model'] = 'fixture'
         elif host == 'cursor':
@@ -213,14 +216,104 @@ class SharedHookTests(unittest.TestCase):
             sensitive.touch(mode=0o000)
             self.assertEqual(self.decision(self.run_hook('deny-env-read.py', data)), 'deny')
 
-    def test_content_search_refuses_unknown_symlinked_subtrees(self):
+    def test_content_search_refuses_symlinks_only_when_the_search_follows_them(self):
+        # 2026-11-10: every node_modules/.bin holds symlinks, so "any symlink denies" blocked
+        # repo-wide search in 22 projects. ripgrep and the Grep tools do not follow links.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / 'linked').symlink_to(root / 'unavailable', target_is_directory=True)
             data = {'hook_event_name': 'PreToolUse', 'tool_name': 'Grep',
                     'tool_input': {'path': directory, 'pattern': 'TODO'}}
-            # Dangling links are file entries; protect them as uncertain targets.
-            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', data)), 'deny')
+            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', data)), 'allow')
+            self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'allow')
+            for command in ('rg -L TODO', 'rg --follow TODO', 'grep -R TODO .'):
+                with self.subTest(command=command):
+                    self.assertEqual(self.decision(self.shell(command, cwd=directory)), 'deny')
+
+    def test_content_search_follows_gitignore_like_ripgrep(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(['git', 'init', '-q', directory], check=True)
+            (root / '.gitignore').write_text('.env\nvendor/\n')
+            (root / 'src').mkdir()
+            (root / 'src/app.py').write_text('pass\n')
+            (root / '.env').touch(mode=0o000)
+            (root / 'vendor').mkdir()
+            (root / 'vendor/.npmrc').touch(mode=0o000)
+            native = {'hook_event_name': 'PreToolUse', 'tool_name': 'Grep',
+                      'tool_input': {'path': directory, 'pattern': 'TODO'}}
+            # Ignored credential files are never opened by the search.
+            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'allow')
+            self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'allow')
+            self.assertEqual(self.decision(self.shell("rg -g '*.py' TODO", cwd=directory)), 'allow')
+            # Anything that makes the search read ignored files brings the full check back.
+            for command in ('rg --no-ignore TODO', 'rg -uu TODO', "rg -g '.env*' TODO", "rg -g '*' TODO",
+                            'rg TODO vendor', 'grep -rn TODO .'):
+                with self.subTest(command=command):
+                    self.assertEqual(self.decision(self.shell(command, cwd=directory)), 'deny')
+            # Red-team pass, 2026-11-10: an include glob overrides gitignore whatever its spelling.
+            (root / 'prod.env').touch(mode=0o000)
+            (root / '.gitignore').write_text('.env\nvendor/\nprod.env\n')
+            for command in ("rg -g 'prod*' TODO", "rg -ig'*' TODO", "rg -ig 'prod*' TODO", "rg -g 'vendor' TODO",
+                            "rg --hidden -g '\\.env' TODO", 'rg -e -- -uu .', 'RIPGREP_CONFIG_PATH=./rc rg TODO',
+                            "grep -r --include='prod*' TODO ."):
+                with self.subTest(command=command):
+                    self.assertEqual(self.decision(self.shell(command, cwd=directory)), 'deny')
+            for glob in ('.env*', '*', 'prod*', 'vendor'):
+                with self.subTest(glob=glob):
+                    native['tool_input']['glob'] = glob
+                    self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+            # Second review, 2026-11-10: glob syntax the check cannot interpret selects everything,
+            # and a glob too large to expand is refused quickly.
+            for glob in ('.en[^x]', 'prod.en[^x]', 'prod.env ', '{a,b}' * 18):
+                with self.subTest(glob=glob):
+                    started = time.monotonic()
+                    self.assertEqual(self.decision(self.shell(f"rg -g '{glob}' TODO", cwd=directory)), 'deny')
+                    native['tool_input']['glob'] = glob
+                    self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+                    self.assertLess(time.monotonic() - started, 5)
+            self.assertEqual(self.decision(self.shell("grep -r --include='.en[^x]' TODO .", cwd=directory)), 'deny')
+            # ripgrep matches ignore patterns case-sensitively even where git does not.
+            (root / '.gitignore').write_text('.env\nvendor/\nprod.env\nSecrets.ENV\n')
+            (root / 'secrets.env').touch(mode=0o000)
+            del native['tool_input']['glob']
+            self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'deny')
+            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+            (root / 'secrets.env').unlink()
+            # ripgrep's own ignore files outrank .gitignore, and a second .git ends the parent's rules.
+            for marker in ('.ignore', '.rgignore', 'src/.ignore'):
+                with self.subTest(marker=marker):
+                    (root / marker).write_text('!prod.env\n')
+                    self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'deny')
+                    self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+                    (root / marker).unlink()
+            (root / 'apps/web/.git').mkdir(parents=True)
+            (root / 'apps/web/.env').touch(mode=0o000)
+            self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'deny')
+            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+            (root / 'apps/web/.env').unlink()
+            (root / 'apps/web/.git').rmdir()
+            self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'allow')
+            native['tool_input']['glob'] = '*'
+            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+            # A credential file that git does not ignore is in scope, so the search is refused.
+            del native['tool_input']['glob']
+            (root / 'src/credentials.json').touch(mode=0o000)
+            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+            self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'deny')
+            self.assertEqual(self.decision(self.shell("rg -g '*.py' TODO", cwd=directory)), 'allow')
+
+    def test_public_and_example_names_are_not_secrets(self):
+        for name, expected in (('appstoreconnect.env.example', 'allow'), ('test-pubkey.pem', 'allow'),
+                               ('com.example.public-key.pem', 'allow'), ('cacert.pem', 'allow'),
+                               ('id_ed25519.pub', 'allow'), ('fleet-key.pem', 'deny'),
+                               ('my-pubkey-private.pem', 'deny'), ('republic-key.pem', 'deny'),
+                               ('cacert-server-private.pem', 'deny'),
+                               ('private.pem', 'deny'), ('id_ed25519', 'deny'), ('prod.env', 'deny')):
+            with self.subTest(name=name):
+                data = {'hook_event_name': 'PreToolUse', 'tool_name': 'Read',
+                        'tool_input': {'file_path': '/tmp/project/' + name}}
+                self.assertEqual(self.decision(self.run_hook('deny-env-read.py', data)), expected)
 
     def test_shell_readers_use_shared_sensitive_name_and_search_scope_checks(self):
         for command in ('cat private.pem.bak', 'cat < private.pem.bak', 'head private.key.old', 'cat service-account.json',
