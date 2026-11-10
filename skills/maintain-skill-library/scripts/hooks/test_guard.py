@@ -66,6 +66,14 @@ EXTRA_ASK = ["stripe customers list", "npm publish", "gh release create v1", "xc
 # 2026-11-10 false-positive audit: routine commands the guard used to stop, each with the
 # neighbouring command that must stay gated.
 FP_ALLOW = [
+    "cat .claude/settings.json | jq .",
+    "cat .claude/settings.json 2>/dev/null",
+    "git add .claude/settings.json && git commit -m x",
+    "rg -i 'drop table' src | head",
+    "git log --grep 'drop table' | head",
+    "which vercel",
+    "npm uninstall vercel",
+    "mkdir vercel",
     "git commit -m 'remove vercel config'",
     "rg -l vercel src",
     "npm i @vercel/analytics",
@@ -109,6 +117,12 @@ FP_ASK = [
     "./deploy-and-verify.sh",
     "npm run deploy:verify",
     "./scripts/check-then-publish.sh",
+    # Third review: quoting must not hide SQL, and a safe word mid-name does not make a script safe.
+    'psql -c "DROP ""TABLE users"',
+    "wrangler d1 execute db --command 'dr''op table x'",
+    "npx netlify-cli deploy --prod",
+    "./deploy-plan-apply.sh",
+    "./release-notes-publish.sh",
 ]
 FP_DENY = [
     "cat ~/.claude/settings.json",
@@ -129,6 +143,12 @@ FP_DENY = [
     "git push --force-with-lease origin HEAD",
     "git push --force-with-lease --all",
     "git push --force-with-lease origin feat:MAIN",
+    "git push --force-with-lease origin 'refs/heads/*:refs/heads/*'",
+    # Third review: a flag or URL glued to the user-level path is not a relative project path.
+    "git commit --allow-empty -F" + HOME + "/.claude/settings.json",
+    "git tag -F" + HOME + "/.claude/settings.json v1",
+    "open file://" + HOME + "/.claude/settings.json",
+    "cat .claude/settings.json | (cd ~; cat .claude/settings.json)",
     # Red-team pass on the audit's own exemptions (2026-11-10): each of these slipped through a first draft.
     "cat id_rsa{.pub,}",
     "cat .env{.example,}",

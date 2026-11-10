@@ -22,6 +22,7 @@ import json
 import os
 import re
 import runpy
+import shlex
 import sys
 import time
 
@@ -53,6 +54,8 @@ TOKEN_META = set("{}*?[]$\\%!^~")
 # A relative path is trusted only in one plain command from this list (see _simple_command).
 SIMPLE_READERS = {"cat", "head", "tail", "less", "ls", "wc", "diff", "jq", "sed", "grep", "rg",
                   "code", "open", "touch", "mkdir", "git"}
+SIMPLE_READERS |= {"sort", "uniq"}
+GIT_DIR_FLAGS = ("-C", "-c", "--git-dir", "--work-tree", "--exec-path", "--namespace", "--config-env")
 _COMMAND = ""  # the whole text under judgement, for _simple_command
 
 HEREDOC = re.compile(r"(?<!<)<<-?(?!<)\s*(['\"]?)([A-Za-z_][\w-]*)\1")
@@ -111,7 +114,7 @@ SCRIPT_WORD = re.compile(r"(?<![a-z])(deploy|release|publish|ship)(?![a-z])", re
 # A script named for checking a deploy is not a deploy: check-dmg-release.sh, deploy.test.js, release-notes.
 SAFE_SCRIPT_WORD = re.compile(
     r"(\.(test|spec)\.\w+$|^(tests?|check|lint|verify)[-_:.]"
-    r"|(deploy|release|publish|ship)[-_:]?(notes|status|plan|check|dry-?run)(?![a-z]))", re.I)
+    r"|(deploy|release|publish|ship)[-_:]?(notes|status|plan|check|dry-?run)(\.\w+)?$)", re.I)
 JOINED_SCRIPT_WORD = re.compile(r"(?<![a-z])(and|then)(?![a-z])", re.I)  # check-then-publish.sh does publish
 SCRIPT_EXT = re.compile(r"\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl)$", re.I)
 DROP_SQL = re.compile(r"\bdrop\s+(database|table)\b", re.I)
@@ -120,7 +123,13 @@ INTERPRETERS = SHELLS | {"node", "python", "python3", "ruby", "perl", "bun", "de
 RUNNERS = SHELLS | {"eval", "source", ".", "parallel", "read"}
 PATTERN_TOOLS = {"grep", "egrep", "fgrep", "rg", "ag", "ack", "sed", "awk", "gawk", "jq", "yq"}
 # Commands whose arguments are text to store, show or search for, not SQL to run.
-TEXT_ONLY = PATTERN_TOOLS | {"git", "gh", "echo", "printf", "ls", "cat", "open"}
+TEXT_ONLY = PATTERN_TOOLS | {"git", "gh", "echo", "printf", "ls", "cat", "open", "head", "tail", "wc", "sort",
+                             "uniq", "cut", "less"}
+PARKED_HOSTS = ("vercel", "netlify", "netlify-cli")
+# Commands that only name a thing: which vercel, mkdir vercel, npm uninstall vercel.
+NAME_ONLY = {"which", "mkdir", "find", "rm", "rmdir", "mv", "cp", "touch", "cd"}
+PACKAGE_EDITS = {"install", "i", "add", "uninstall", "remove", "rm", "un", "ls", "list", "why", "view", "info",
+                 "outdated", "update", "up"}
 PATTERN_VALUE_FLAGS = {
     "-A", "-B", "-C", "-m", "-g", "--glob", "--iglob", "-t", "--type", "-T", "--type-not", "--max-count",
     "--arg", "--argjson", "-d", "--include", "--exclude", "--exclude-dir", "-M", "--max-columns",
@@ -563,16 +572,25 @@ def _mentions_secret(text, cwd=None) -> bool:
     return False
 
 
+@lru_cache(maxsize=8)
 def _simple_command(text) -> bool:
-    """One plain file command: no pipe, list, substitution, redirect, variable, directory flag or '..'."""
-    if not text or any(ch in text for ch in ";&|`$\n\r<>(){}\\"):
+    """Plain file commands joined by | && ; where nothing can move the directory a relative path is read from."""
+    text = text.replace("2>/dev/null", " ").replace("2>&1", " ")
+    if not text.strip() or any(ch in text for ch in "`$\n\r<>(){}\\"):
         return False
-    words = [word for _, word in _lex(text)]
-    if not words or words[0] not in SIMPLE_READERS:
-        return False
-    return not any(".." in word.split("/") or word.startswith(("-C", "-c", "--git-dir", "--work-tree",
-                                                                "--exec-path", "--namespace"))
-                   for word in words[1:])
+    for part in re.split(r"\|\||&&|[|;&]", text):
+        try:
+            words = shlex.split(part)
+        except ValueError:
+            return False
+        if not words or words[0] not in SIMPLE_READERS or any(".." in word.split("/") for word in words):
+            return False
+        if words[0] == "git" and any(word.startswith(GIT_DIR_FLAGS) for word in words[1:]):
+            return False
+    return True
+
+
+RELATIVE_PATH = re.compile(r"(?:[A-Za-z0-9_.@+][A-Za-z0-9_.@+-]*/)*[A-Za-z0-9_.@+][A-Za-z0-9_.@+-]*")
 
 
 def _project_file(token, cwd) -> bool:
@@ -583,7 +601,8 @@ def _project_file(token, cwd) -> bool:
     if not cwd or ".." in token.split("/"):
         return False
     absolute = token.startswith(("/", "~/"))
-    if not absolute and not _simple_command(_COMMAND):
+    # A relative token must be a bare path: -F/Users/x and file:///Users/x are not.
+    if not absolute and not (RELATIVE_PATH.fullmatch(token) and _simple_command(_COMMAND)):
         return False
     path = _expand(token, cwd)
     if path is None or not path.startswith("/"):
@@ -884,7 +903,7 @@ def _git_verdict(args):
         if lease:
             # Only a named branch other than main can be approved; HEAD or no refspec may be main.
             targets = [r.split(":")[-1].split("/")[-1].lower() for r in pos[1:]]
-            if wide or not targets or any(t in ("main", "master", "head", "@", "") for t in targets):
+            if wide or not targets or any(t in ("main", "master", "head", "@", "") or "*" in t for t in targets):
                 return "deny", R_FORCE
             level = "ask"
         if any(r.startswith(":") for r in pos):
@@ -952,8 +971,13 @@ def _deploy_named(text) -> bool:
 
 def _ask_command(name, argv0, args) -> bool:
     # Parked hosts: any use needs Cohen, also through a wrapper (yarn vercel, doppler run -- vercel).
-    if name in ("vercel", "netlify") or (name not in TEXT_ONLY and any(a in ("vercel", "netlify") for a in args)):
+    if name in PARKED_HOSTS + ("vc", "ntl"):
         return True
+    if any(a in PARKED_HOSTS for a in args) and name not in TEXT_ONLY | NAME_ONLY and not (
+            name in ("npm", "yarn", "pnpm", "bun") and args[0] in PACKAGE_EDITS):
+        return True
+    if name not in TEXT_ONLY and DROP_SQL.search(" ".join(args)):
+        return True  # catches quoting that hides the words from the raw text
     if name == "curl":
         return _curl_writes(args) and not _curl_local(args)
     if name == "wrangler":
