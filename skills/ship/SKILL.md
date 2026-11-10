@@ -24,6 +24,18 @@ archives and build noise stay outside commits; report leftovers honestly.
 App Review submission and credential changes still require explicit separate
 authorization. Project owner-only steps remain owner-only.
 
+## Pre-ship gate (any finished unit, no /ship)
+
+When a unit of work is done (code, page, ad package, agent workflow) but Cohen has not run `/ship` or asked to push, run this gate only. No commit, push, PR, or deploy unless asked.
+
+1. Name the outcome in one sentence (user result, not implementation).
+2. Code: `git status`; narrowest useful tests, then build/typecheck/lint if present; run `/ponytail-review` on `git diff <base>...HEAD` and fix its Must fix items; check the diff for unrelated changes, secrets, risk.
+3. Eval loop: 3–7 pass/fail checks, deterministic first (URL 200, price text, checkout opens, campaign status draft/paused), plus one behavioral check if needed (happy-path screenshot, copy passes outbound-as-cohen/anti-slop, no secret or path leaks). Run them and capture evidence (status codes, IDs, screenshot paths). Any fail → fix or file the gap; not done.
+4. Web launch → `launch-qa-five-personas` (Roundtable: five first-time visitors in a real browser on the preview/live URL; test mode only, no real payments or emails). Any blocker = FAIL: fix, redeploy the preview, rerun until PASS.
+5. Customer-facing surface (landing, pricing, announcement, ad, launch email, onboarding copy, App Store or marketing site, Workers/Pages site) → also `preship-four-personas` (Customer, Competitor, Skeptic, Conversion; review only, no edits/deploys/pushes/submits). Verdict must be SHIP with no blockers. Roundtable owns live browser UX, this owns messaging; both must pass. Attach its findings table and top 5 changes.
+6. Spend involved → write kill/scale rules (e.g. pause if CTR < 0.3% after 48h). Never activate or unpause ads without Cohen's yes.
+7. Report: outcome, changes, checks with evidence, both persona verdicts when they ran, remaining risk. PR (only if asked) = summary, test plan, risk notes, UI screenshots. Don't trust an agent's "done" or invent metrics.
+
 ## Release prose
 
 Keep every commit message, PR title/body/comment/reply, changelog, release note,
@@ -145,7 +157,11 @@ report its exact cause, preserved work, and next required action. Do not ask
 
 For web launches and signup/checkout/pricing changes, run
 `launch-qa-five-personas` on an isolated preview before production promotion;
-fix blockers until PASS. Cloudflare Version URLs use production resources and
+fix blockers until PASS. Alongside it, run `preship-four-personas` (Customer,
+Competitor, Skeptic, Conversion review of messaging and positioning; review only)
+on every customer-facing surface: landing, pricing, announcement, ad, launch
+email, onboarding copy, App Store or marketing site. Both must pass with no
+blockers before production; report both verdicts. Cloudflare Version URLs use production resources and
 are not isolated write-test environments. Respect the project's CI deployment
 path; never launch a second manual deploy alongside it. Follow
 `deploy-cloudflare` for account, environment, output scan, and provider details.

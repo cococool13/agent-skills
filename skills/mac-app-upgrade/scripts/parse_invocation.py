@@ -26,6 +26,11 @@ IMPLEMENT_WORD = re.compile(
     re.I,
 )
 # "upgrade" is the skill name and must not imply mutation.
+# "Do not implement anything." is a report-only ask, so negated wording never counts.
+NEGATED_IMPLEMENT = re.compile(
+    r"\b(?:do\s+not|don['’]?t|never|no|without|not\s+to)\s+(?:\w+\s+){0,2}?(?:fix|fixes|fixed|apply|implement|implementation|patch|patches)\b",
+    re.I,
+)
 
 
 def levenshtein(a: str, b: str) -> int:
@@ -79,7 +84,7 @@ def classify(tokens: list[str]) -> dict:
 
     has_report = any(f in REPORT_FLAGS for f in flags)
     has_implement = any(f in IMPLEMENT_FLAGS for f in flags)
-    nl_implement = any(IMPLEMENT_WORD.search(p) for p in positionals)
+    nl_implement = any(IMPLEMENT_WORD.search(NEGATED_IMPLEMENT.sub(" ", p)) for p in positionals)
 
     notes: list[str] = []
     if has_report and has_implement:

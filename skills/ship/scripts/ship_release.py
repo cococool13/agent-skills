@@ -89,7 +89,9 @@ def http_check(url: str, sha: str, version: str = '', contains='', status=200, i
     if not url.startswith(('https://', 'http://localhost:', 'http://127.0.0.1:')):
         raise Blocked('live checks require HTTPS or a local fixture URL')
     try:
-        with urllib.request.urlopen(url, timeout=20) as response:
+        # Cloudflare answers the default Python-urllib agent with 403.
+        request = urllib.request.Request(url, headers={'User-Agent': 'ship-helper/1 (+release smoke check)'})
+        with urllib.request.urlopen(request, timeout=20) as response:
             body = response.read(1024 * 1024).decode('utf-8', errors='replace')
             if response.status != status:
                 raise Blocked('live check returned an unexpected status')

@@ -229,5 +229,32 @@ class SkillSyncTests(unittest.TestCase):
             self.assertEqual(sync.host_copies(), [])
             self.assertEqual(sync.wanted(), {'create-hook': sync.CANON / 'create-hook'})
 
+    def test_ponytail_skip_stays_canonical_and_leaves_client_views(self):
+        sync = load('sync_ponytail_skip', 'sync-claude-skills.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sync.CANON = root / 'canon'
+            sync.HOST_BUILTINS = root / 'builtins'
+            sync.PONYTAIL = root / 'plugins'
+            sync.VIEWS = {'cursor': root / 'cursor', 'claude': root / 'claude'}
+            skipped = sync.CANON / 'ponytail-audit'
+            skipped.mkdir(parents=True)
+            (skipped / 'SKILL.md').write_text('keep canonical\n')
+            kept = sync.CANON / 'ponytail'
+            kept.mkdir()
+            (kept / 'SKILL.md').write_text('keep linked\n')
+            for view in sync.VIEWS.values():
+                view.mkdir()
+                (view / 'ponytail-audit').symlink_to(skipped)
+            self.assertNotIn('ponytail-audit', sync.wanted())
+            self.assertEqual(sync.wanted()['ponytail'], kept)
+            with patch.object(sync, 'sync_node_link', return_value='node unchanged'):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(sync.main(), 0)
+            self.assertTrue((skipped / 'SKILL.md').is_file())
+            for view in sync.VIEWS.values():
+                self.assertFalse((view / 'ponytail-audit').exists())
+                self.assertEqual((view / 'ponytail').resolve(), kept.resolve())
+
 
 if __name__ == '__main__': unittest.main()
