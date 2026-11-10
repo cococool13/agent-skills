@@ -46,7 +46,8 @@ EXTRA_DENY = [
     "security find-internet-password -s example",
     "security dump-keychain",
     "git push -f origin main",
-    "git push --force-with-lease origin feat",
+    "git push --force-with-lease origin main",
+    "git push --force-with-lease origin HEAD:master",
     "git push origin +main",
     "rm -rf /",
     "rm -rf $HOME",
@@ -58,7 +59,76 @@ EXTRA_DENY = [
     "git status; env",
     "stripe charges create --live",
 ]
-EXTRA_ASK = ["stripe customers list", "npm publish", "gh release create v1", "xcrun altool --upload-app -f a.ipa", "gh pr merge 3", "git reset --hard"]
+EXTRA_ASK = ["stripe customers list", "npm publish", "gh release create v1", "xcrun altool --upload-app -f a.ipa", "gh pr merge 3", "git reset --hard",
+             # A lease on a feature branch is destructive git Cohen can approve (2026-11-10); main stays denied.
+             "git push --force-with-lease origin feat"]
+
+# 2026-11-10 false-positive audit: routine commands the guard used to stop, each with the
+# neighbouring command that must stay gated.
+FP_ALLOW = [
+    "git commit -m 'remove vercel config'",
+    "rg -l vercel src",
+    "npm i @vercel/analytics",
+    "git clone https://github.com/vercel/next.js /tmp/nextjs",
+    "ls node_modules/@netlify",
+    "git commit -m 'drop table of contents'",
+    ".build/release/mytool --help",
+    "./build/Release/App.app/Contents/MacOS/App",
+    "npm run release-notes",
+    "bash checks/check-dmg-release.sh",
+    "node scripts/deploy.test.js",
+    "pnpm test:deploy",
+    "wrangler deploy --dry-run",
+    "cat .claude/settings.json",
+    "git add .claude/settings.json",
+    "git diff -- .claude/settings.json",
+    "ssh-keygen -lf ~/.ssh/id_ed25519.pub",
+    "cat test-pubkey.pem",
+    "cat keys/com.example.public-key.pem",
+    "cat appstoreconnect.env.example",
+    "touch .env.local",
+    "cp .env.example .env",
+    "grep -rn --include='*.ts' TODO .",
+    "rg -g '*.ts' TODO",
+]
+FP_ASK = [
+    "vercel deploy",
+    "npx netlify deploy",
+    "psql -c 'drop table users'",
+    "./deploy.sh",
+    "npm run deploy",
+    "node scripts/deploy.js",
+    "wrangler deploy --env production",
+]
+FP_DENY = [
+    "cat ~/.claude/settings.json",
+    "cd ~ && cat .claude/settings.json",
+    "cat ../../.claude/settings.json",
+    "cat fleet-key.pem",
+    "cat ~/.ssh/id_ed25519",
+    "cp .env /tmp/copy.txt",
+    "rg --no-ignore TODO ~/.codex",
+    "rg -g '*.json' TODO ~/.claude",
+    # Red-team pass on the audit's own exemptions (2026-11-10): each of these slipped through a first draft.
+    "cat id_rsa{.pub,}",
+    "cat .env{.example,}",
+    "cat ~root/.claude/settings.json",
+    "cat ~/{,}.claude/settings.json",
+    "cat /System/Volumes/Data" + HOME + "/.claude/settings.json",
+    "tar cf - -C ~ .claude/settings.json",
+    "env -C ~ cat .claude/settings.json",
+    "git -C ~ diff --no-index /dev/null .claude/settings.json",
+    "chdir ~ && cat .claude/settings.json",
+    "eval 'cd ~'; cat .claude/settings.json",
+    "echo ~ | xargs -I% cat %/.claude/settings.json",
+    "find ~ -path '*/.claude/settings.json' -exec cat {} +",
+    "python3 -c \"import os;print(open(os.path.expanduser('~')+'/.claude/settings.json').read())\"",
+    "cat my-pubkey-private.pem",
+    "cat republic-key.pem",
+    "cat cacert-server-private.pem",
+    "mv .env .env.local.example",
+    "cp -p .env .env.copy.example",
+]
 EXTRA_ALLOW = [
     "rm -rf node_modules",
     "rm -rf ~/Projects/Example/dist",
@@ -363,6 +433,11 @@ class GuardContract(unittest.TestCase):
 
     def test_allow(self):
         self.matrix(ALLOW + EXTRA_ALLOW, "allow")
+
+    def test_false_positive_audit(self):
+        self.matrix(FP_ALLOW, "allow")
+        self.matrix(FP_ASK, "ask")
+        self.matrix(FP_DENY, "deny")
 
     def test_red_team_deny(self):
         self.matrix(RED_DENY, "deny")

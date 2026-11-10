@@ -7,7 +7,11 @@ deny: any mention of a secret path (except ls/test/stat/wc -c/shasum/jq keys/gre
       chmod/cp -p/mv of it), env dumps, Keychain, gh token, live Stripe, force-push,
       rm -r / find -delete / xargs rm outside $PWD, ~/Projects/<repo> build dirs, or temp dirs.
 ask:  deploys, releases, publishes, App Store uploads, merges, remote curl/gh api writes,
-      git --no-verify / -n / reset --hard / push --delete, deploy-named scripts.
+      git --no-verify / -n / reset --hard / push --delete / --force-with-lease off main,
+      deploy-named scripts (by file name; check/test/notes/dry-run names are exempt).
+Recursive search: ripgrep reads what git does not ignore and follows no symlinks, so its scope
+is judged from git's file list; grep -r, ag, ack and rg --no-ignore/-u/-L get a full name walk.
+A project's own .claude/settings.json is an ordinary file; the user-level one is a secret.
 Everything else: Claude/Codex get no output (native permissions apply);
 Cursor gets {"permission": "allow"} because its contract needs JSON.
 A parse or runtime error exits 2, which every client treats as a block.
@@ -39,6 +43,18 @@ SECRET = (
     r"|id_rsa|id_ed25519|\.appstoreconnect/)"
 )
 SECRET_RE = re.compile(SECRET, re.I)
+# Public halves and CA bundles carry no secret: id_ed25519.pub, test-pubkey.pem, cacert.pem.
+PUBLIC_TOKEN = re.compile(
+    r"(\.pub$|(^|[-_./])pub(lic)?[-_.]?key\.pem$|(^|/)(cacert|ca-bundle|ca-certificates)\.pem$)", re.I)
+PROJECT_SETTINGS = re.compile(r"\.claude/settings\.json$", re.I)
+TOKEN_EDGE = " \t\r\n'\"`()=,;<>|&"
+# A token the shell may rewrite (brace, glob, variable, xargs placeholder) is never exempt.
+TOKEN_META = set("{}*?[]$\\%!^~")
+# Ways a command can read relative paths from somewhere other than the hook's cwd.
+CWD_SHIFT = re.compile(
+    r"(^|[\s;&|(`'\"])(eval|source|xargs|find|chdir|\.)\s|\s-C\b|--(directory|git-dir|work-tree|cwd|chdir|prefix)\b"
+    r"|chdir\s*\(|\bcwd\s*[:=]|expanduser|homedir|\bhome\b|~|/Users/|/home/", re.I)
+_COMMAND = ""  # the whole text under judgement, for CWD_SHIFT
 
 HEREDOC = re.compile(r"(?<!<)<<-?(?!<)\s*(['\"]?)([A-Za-z_][\w-]*)\1")
 SHELL_FED = re.compile(r"\b(sh|bash|zsh|dash|ksh|ssh|eval|source|xargs)\b")
@@ -65,11 +81,8 @@ SECRET_COMMANDS = [
 
 # Whole-text asks for tools the token checks below do not model.
 ASK = [
-    r"\bdrop\s+(database|table)\b",
     r"\bmkfs\b",
     r"\bdd\s+if=",
-    r"\bvercel\b",
-    r"\bnetlify\b",
     r"\bfirebase\s+(deploy|hosting)",
     # Remote code run straight from the network.
     r"\b(curl|wget)\b[^\n;&]*\|\s*(sudo\s+)?(sh|bash|zsh|dash|python3?)\b",
@@ -93,11 +106,19 @@ TMP_MARK = "/private/tmp/__tmpdir__"  # stands in for $TMPDIR
 UNSAFE_CWD_ROOTS = {"Library", "Documents", "Desktop", "Downloads", "Pictures", "Movies", "Music",
                     "Projects", ".ssh", ".gnupg", ".aws"}
 
+SCRATCH_ROOT = HOME + "/Library/Application Support/Claude/scratch-workspaces/"  # the app's per-session folders
+
 SCRIPT_WORD = re.compile(r"(?<![a-z])(deploy|release|publish|ship)(?![a-z])", re.I)
+# A script named for checking a deploy is not a deploy: check-dmg-release.sh, deploy.test.js, release-notes.
+SAFE_SCRIPT_WORD = re.compile(r"(?<![a-z])(tests?|spec|check|lint|verify|notes|dry-?run|status|plan)(?![a-z])", re.I)
+SCRIPT_EXT = re.compile(r"\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl)$", re.I)
+DROP_SQL = re.compile(r"\bdrop\s+(database|table)\b", re.I)
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
 INTERPRETERS = SHELLS | {"node", "python", "python3", "ruby", "perl", "bun", "deno", "tsx", "ts-node", "php"}
 RUNNERS = SHELLS | {"eval", "source", ".", "parallel", "read"}
 PATTERN_TOOLS = {"grep", "egrep", "fgrep", "rg", "ag", "ack", "sed", "awk", "gawk", "jq", "yq"}
+# Commands whose arguments are text to store, show or search for, not SQL to run.
+TEXT_ONLY = PATTERN_TOOLS | {"git", "gh", "echo", "printf", "ls", "cat", "open"}
 PATTERN_VALUE_FLAGS = {
     "-A", "-B", "-C", "-m", "-g", "--glob", "--iglob", "-t", "--type", "-T", "--type-not", "--max-count",
     "--arg", "--argjson", "-d", "--include", "--exclude", "--exclude-dir", "-M", "--max-columns",
@@ -112,7 +133,7 @@ LEVEL = {"allow": 0, "ask": 1, "deny": 2}
 
 R_SECRET = "Do not read secret/credential files. Check key names in code or docs instead."
 R_ENV = "Do not print environment values, Keychain items, tokens, or use live Stripe."
-R_FORCE = "Force-push is blocked. Push a new branch or ask Cohen."
+R_FORCE = "Force-push is blocked. On a branch other than main, --force-with-lease can be approved by Cohen; otherwise push a new branch."
 R_RM = "Recursive delete is allowed only inside the working directory, ~/Projects/<repo> build dirs, or temp dirs."
 R_RM_ASK = "Recursive delete with an unresolved target. Wait for Cohen's approval."
 R_ASK = "Deploy, release, publish, submit, merge, remote write, or destructive git. State the exact target and wait for Cohen's approval."
@@ -364,7 +385,7 @@ def _cwd_ok(cwd) -> bool:
     """A working directory where deleting inside it is routine."""
     if not cwd:
         return False
-    if any(cwd.startswith(r) and len(cwd) > len(r) for r in TEMP_ROOTS):
+    if any(cwd.startswith(r) and len(cwd) > len(r) for r in TEMP_ROOTS + (SCRATCH_ROOT,)):
         return True
     if not cwd.startswith(HOME + "/"):
         return False
@@ -520,11 +541,49 @@ def _scan_tokens(name, args):
     return [a for a in args if not a.startswith(("--exclude", "--ignore"))]
 
 
-def _inspector(name, args) -> bool:
+def _mentions_secret(text, cwd=None) -> bool:
+    """A secret path in text, ignoring public key files and a project's own .claude/settings.json."""
+    for m in SECRET_RE.finditer(text):
+        start, end = m.start(), m.end()
+        while start > 0 and text[start - 1] not in TOKEN_EDGE:
+            start -= 1
+        while end < len(text) and text[end] not in TOKEN_EDGE:
+            end += 1
+        token = text[start:end]
+        plain = not set(token[2:] if token.startswith("~/") else token) & TOKEN_META
+        if plain and PUBLIC_TOKEN.search(token) and "priv" not in token.lower():
+            continue
+        if plain and PROJECT_SETTINGS.search(token) and _project_file(token, cwd):
+            continue
+        return True
+    return False
+
+
+def _project_file(token, cwd) -> bool:
+    """The path provably resolves inside a project or temp folder, not to a protected client config.
+
+    A relative path counts only when nothing in the command can move the directory it is read from.
+    """
+    if not cwd or ".." in token.split("/"):
+        return False
+    absolute = token.startswith(("/", "~/"))
+    if not absolute and CWD_SHIFT.search(_COMMAND):
+        return False
+    path = _expand(token, cwd)
+    if path is None or not path.startswith("/"):
+        return False
+    real = os.path.realpath(path)
+    roots = (PROJECTS + "/", SCRATCH_ROOT) + TEMP_ROOTS
+    if not (any(real.startswith(root) for root in roots) and any(path.startswith(root) for root in roots)):
+        return False
+    return not _read_guard()["protected_path"](path, cwd)
+
+
+def _inspector(name, args, cwd=None) -> bool:
     """Commands that may name a secret file without printing its contents."""
     flags = [a for a in args if a.startswith("-") and a != "-"]
     pos = [a for a in args if not a.startswith("-") or a == "-"]
-    if name in ("ls", "test", "[", "[[", "stat", "shasum", "sha256sum", "md5", "chmod", "echo", "printf"):
+    if name in ("ls", "test", "[", "[[", "stat", "shasum", "sha256sum", "md5", "chmod", "echo", "printf", "touch"):
         return True
     if name == "find":
         return not any(a in ("-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fls") for a in args)
@@ -534,10 +593,22 @@ def _inspector(name, args) -> bool:
         return bool(pos) and pos[0] in ("keys", "keys[]", "keys_unsorted")
     if name in ("grep", "egrep", "fgrep", "rg"):
         return any(f in ("--count", "--files-with-matches", "--files-without-match", "--quiet")
-                   or (not f.startswith("--") and set(f[1:]) & set("clLq")) for f in flags)
+                   # -L lists non-matching files in grep but follows symlinks in ripgrep.
+                   or (not f.startswith("--") and set(f[1:]) & set("clq" if name == "rg" else "clLq"))
+                   for f in flags)
     if name in ("cp", "mv"):
         keeps = name == "mv" or any(not f.startswith("--") and "p" in f for f in flags)
-        return keeps and len(pos) >= 2 and all(SECRET_RE.search(p) for p in pos)
+        guard = _read_guard()
+        # Both classifiers must call every name a secret, so a copy never lands under a readable name.
+        if keeps and len(pos) >= 2 and all(
+                _mentions_secret(p, cwd) and (guard["secret_name"](p) or _sensitive_file(p, cwd)) for p in pos):
+            return True
+        # cp .env.example .env: seed a new env file from a template. Never over an existing one.
+        if (name == "cp" and len(pos) == 2 and cwd and not _mentions_secret(pos[0], cwd)
+                and not _sensitive_file(pos[0], cwd) and not set(pos[0] + pos[1]) & TOKEN_META):
+            target = _expand(pos[1], cwd)
+            return bool(target) and target.startswith("/") and not os.path.lexists(target)
+        return False
     if name == "git":
         sub = pos[0] if pos else ""
         return sub in ("check-ignore", "ls-files", "status") or (sub == "rm" and "--cached" in args)
@@ -559,37 +630,92 @@ def _sensitive_file(token, cwd) -> bool:
             or guard["secret_name"](os.path.realpath(path)))
 
 
-def _path_read_verdict(name, args, cwd) -> bool:
+RG_VALUE_FLAGS = set("ABCEefgjmMrtTd")  # ripgrep short flags that take a value
+
+
+def _search_options(name, args):
+    """(respects gitignore, follows symlinks, globs) for a recursive search command.
+
+    Every argument is read as a possible flag, including after "--": a misread
+    only sends the search to the stricter full walk.
+    """
+    follow = False
+    unrestricted = "RIPGREP_CONFIG_PATH" in _COMMAND or "RIPGREP_CONFIG_PATH" in os.environ
+    globs, i = [], 0
+    while i < len(args):
+        a = args[i]
+        following = args[i + 1] if i + 1 < len(args) else ""
+        if a.startswith("--"):
+            flag, eq, value = a.partition("=")
+            if flag in ("--glob", "--iglob", "--include", "--exclude", "--exclude-dir"):
+                if not eq:
+                    value, i = following, i + 1
+                globs.append(("!" if flag.startswith("--exclude") else "") + value)
+            else:
+                follow |= flag in ("--follow", "--dereference-recursive")
+                unrestricted |= flag.startswith("--no-ignore") or flag in (
+                    "--unrestricted", "--pre", "--pre-glob", "--ignore-file")
+        elif a.startswith("-") and len(a) > 1:
+            cluster = a[1:]
+            for k, ch in enumerate(cluster):
+                if name != "rg":
+                    follow |= ch in "RS" or (name == "ag" and ch == "f")
+                    continue
+                if ch in RG_VALUE_FLAGS:
+                    value = cluster[k + 1:]
+                    if not value:
+                        value, i = following, i + 1
+                    if ch == "g":
+                        globs.append(value)
+                    break
+                unrestricted |= ch == "u"
+                follow |= ch == "L"
+        i += 1
+    # Only ripgrep is modelled as skipping gitignored files; ag, ack and grep get the full walk.
+    return name == "rg" and not unrestricted, follow, globs
+
+
+def _path_read_verdict(name, args, cwd) -> str:
+    """The deny reason when this reader would open a secret file, else ''."""
     readers = {"cat", "head", "tail", "less", "more", "sed", "awk", "gawk",
                "jq", "yq", "grep", "egrep", "fgrep", "rg", "ag", "ack",
                "base64", "xxd", "strings", "od", "hexdump", "diff", "cmp"}
-    if name not in readers or _inspector(name, args) or name == "rg" and "--files" in args:
-        return False
+    if name not in readers or _inspector(name, args, cwd) or name == "rg" and "--files" in args:
+        return ""
     guard = _read_guard()
     paths = [p for p in _scan_tokens(name, args) if not p.startswith("-")]
     for token in paths:
         if _sensitive_file(token, cwd):
-            return True
+            return R_SECRET
     recursive = name in {"rg", "ag", "ack"} or name in {"grep", "egrep", "fgrep"} and any(
         a in {"--recursive", "--dereference-recursive"}
         or a.startswith("-") and not a.startswith("--") and set(a[1:]) & set("rR") for a in args)
     if recursive:
-        for token in paths or ["."]:
+        respect_ignore, follow, globs = _search_options(name, args)
+        scopes = paths or ["."]
+        # A "path" that does not exist is probably the pattern after a flag this parser
+        # misread (rg -ig GLOB PATTERN), which leaves the working directory as the scope.
+        if not all((_expand(t, cwd) or "").startswith("/") and os.path.lexists(_expand(t, cwd)) for t in scopes):
+            scopes = scopes + ["."]
+        for token in scopes:
             path = _expand(token, cwd)
-            if path is None or guard["unsafe_search_scope"](path, cwd or os.getcwd()):
-                return True
-    return False
+            if path is None or guard["unsafe_search_scope"](path, cwd or os.getcwd(), respect_ignore, follow, globs):
+                return guard["SCOPE_REASON"]
+    return ""
 
 
-def _secret_verdict(argv0, name, args, redirs, in_subst, pipe_has_runner, cwd="") -> bool:
+def _secret_verdict(argv0, name, args, redirs, in_subst, pipe_has_runner, cwd="") -> str:
+    """The deny reason when this command would read a secret, else ''."""
     for op, target in redirs:
-        if op != "<<" and op not in (">>", "&>>") and (SECRET_RE.search(target) or _sensitive_file(target, cwd)):
-            return True  # read from, or truncate, a secret file
-    if _path_read_verdict(name, args, cwd):
-        return True
-    if not (SECRET_RE.search(argv0) or any(SECRET_RE.search(t) for t in _scan_tokens(name, args))):
-        return False
-    return in_subst or pipe_has_runner or not _inspector(name, args)
+        if op != "<<" and op not in (">>", "&>>") and (_mentions_secret(target, cwd) or _sensitive_file(target, cwd)):
+            return R_SECRET  # read from, or truncate, a secret file
+    reason = _path_read_verdict(name, args, cwd)
+    if reason:
+        return reason
+    tokens = _scan_tokens(name, args)
+    if not (_mentions_secret(argv0, cwd) or any(_mentions_secret(t, cwd) for t in tokens)):
+        return ""
+    return R_SECRET if in_subst or pipe_has_runner or not _inspector(name, args, cwd) else ""
 
 
 # ---------- asks ----------
@@ -650,6 +776,8 @@ def _wrangler_risky(args) -> bool:
         prev = None
         pos.append(a)
     p = (pos + ["", "", ""])[:3]
+    if "--dry-run" in args and p[0] in ("deploy", "publish", "versions"):
+        return False  # builds and reports, uploads nothing
     if p[0] in ("deploy", "publish", "rollback", "delete") or p[0].startswith("secret:"):
         return True
     if p[0] in ("pages", "versions", "triggers") and "deploy" in p[1:]:
@@ -706,7 +834,7 @@ def _git_verdict(args):
         i += 1
     sub, rest = (args[i] if i < len(args) else ""), args[i + 1:]
     if sub == "push":
-        level, pos, j = "allow", [], 0
+        level, pos, j, lease = "allow", [], 0, False
         while j < len(rest):
             a = rest[j]
             if a == "--":
@@ -714,8 +842,10 @@ def _git_verdict(args):
                 break
             if a.startswith("--"):
                 n = a.split("=")[0]
-                if n in ("--force", "--force-with-lease", "--force-if-includes"):
+                if n == "--force":
                     return "deny", R_FORCE
+                if n in ("--force-with-lease", "--force-if-includes"):
+                    lease = True  # refuses to overwrite unseen work: ask, except on main
                 if n in ("--delete", "--mirror", "--prune"):
                     level = "ask"
                 if n in ("--repo", "--receive-pack", "--exec", "--push-option") and "=" not in a:
@@ -734,6 +864,10 @@ def _git_verdict(args):
             j += 1
         if any(r.startswith("+") for r in pos):
             return "deny", R_FORCE
+        if lease:
+            if any(r.split(":")[-1].split("/")[-1] in ("main", "master") for r in pos[1:]):
+                return "deny", R_FORCE
+            level = "ask"
         if any(r.startswith(":") for r in pos):
             level = "ask"
         if level == "ask":
@@ -781,7 +915,27 @@ def _script_arg(name, args):
     return a[i] if i < len(a) else None
 
 
+def _deploy_named(text) -> bool:
+    """A script or task named for deploying, releasing, publishing or shipping."""
+    parts = [p for p in text.split("/") if p not in ("", ".", "..")]
+    if not parts:
+        return False
+    base = parts[-1]
+    if SAFE_SCRIPT_WORD.search(base):
+        return False
+    if SCRIPT_WORD.search(base):
+        return True
+    # scripts/release/build.sh still counts; build output such as .build/release/tool does not.
+    return bool(SCRIPT_EXT.search(base)) and any(
+        SCRIPT_WORD.search(p) for p in parts[:-1]) and not any(
+        p in BUILD_DIRS or p in ("Build", "Products") for p in parts[:-1])
+
+
 def _ask_command(name, argv0, args) -> bool:
+    if name in ("vercel", "netlify"):
+        return True  # parked hosts: any use needs Cohen
+    if name not in TEXT_ONLY and DROP_SQL.search(" ".join(args)):
+        return True
     if name == "curl":
         return _curl_writes(args) and not _curl_local(args)
     if name == "wrangler":
@@ -792,9 +946,9 @@ def _ask_command(name, argv0, args) -> bool:
         pos = [a for a in args if not a.startswith("-")]
         if pos[:1] == ["publish"]:
             return True
-        if pos[:1] in (["run"], ["run-script"]) and len(pos) > 1 and SCRIPT_WORD.search(pos[1]):
+        if pos[:1] in (["run"], ["run-script"]) and len(pos) > 1 and _deploy_named(pos[1]):
             return True
-        if name in ("pnpm", "yarn", "bun") and pos and SCRIPT_WORD.search(pos[0]):
+        if name in ("pnpm", "yarn", "bun") and pos and _deploy_named(pos[0]):
             return True
     if name in ("make", "gmake", "just", "task", "mise", "rake"):
         pos, skip = [], False
@@ -805,7 +959,7 @@ def _ask_command(name, argv0, args) -> bool:
                 skip = True
             elif not a.startswith("-") and "=" not in a:
                 pos.append(a)
-        if any(SCRIPT_WORD.search(t) for t in pos):
+        if any(_deploy_named(t) for t in pos):
             return True
     if name in INTERPRETERS:
         script = _script_arg(name, args)
@@ -821,11 +975,11 @@ def _ask_command(name, argv0, args) -> bool:
                                   "--verify-only", "--cleanup-report", "--all", "--status")
                             for a in args[1:])):
                 return False
-        if script and SCRIPT_WORD.search(script):
+        if script and _deploy_named(script):
             return True
-    if "/" in argv0 and SCRIPT_WORD.search(argv0):
+    if "/" in argv0 and _deploy_named(argv0):
         return True  # ./deploy.sh, scripts/release/x.sh
-    if SCRIPT_WORD.search(name) and re.search(r"\.(sh|py|js|mjs|cjs|ts|rb|pl)$", name):
+    if _deploy_named(name) and re.search(r"\.(sh|py|js|mjs|cjs|ts|rb|pl)$", name):
         return True
     # Notarize, staple and export stay local or private; only altool uploads to App Store Connect.
     if name == "xcrun":
@@ -876,18 +1030,19 @@ def analyze(text: str, cwd, depth=0, in_subst=False) -> Verdict:
     for idx, seg in enumerate(segs):
         argv, xargs = norm[idx]
         if not argv:
-            if any(op != "<<" and op not in (">>", "&>>") and SECRET_RE.search(t) for op, t in seg["redirs"]):
+            if any(op != "<<" and op not in (">>", "&>>") and _mentions_secret(t, cwd) for op, t in seg["redirs"]):
                 v.add("deny", R_SECRET)
             continue
         argv0, name, args = argv[0], _name(argv[0]), argv[1:]
-        if name in ("cd", "pushd"):
+        if name in ("cd", "pushd", "chdir"):
             if not in_subst:
                 cwd = _cd(args, cwd)
             continue
         same_pipe = [j for j, s in enumerate(segs) if s["pipe"] == seg["pipe"] and j != idx]
         runner = any(norm[j][1] or (norm[j][0] and _name(norm[j][0][0]) in RUNNERS) for j in same_pipe)
-        if _secret_verdict(argv0, name, args, seg["redirs"], in_subst, runner, cwd):
-            v.add("deny", R_SECRET)
+        secret_reason = _secret_verdict(argv0, name, args, seg["redirs"], in_subst, runner, cwd)
+        if secret_reason:
+            v.add("deny", secret_reason)
         producer = None
         if xargs and idx > 0 and segs[idx - 1]["pipe"] == seg["pipe"] and norm[idx - 1][0]:
             producer = (_name(norm[idx - 1][0][0]), norm[idx - 1][0][1:])
@@ -941,6 +1096,8 @@ def _consume_approval(cwd: str, command: str) -> bool:
 
 
 def decide(cmd: str, cwd: str = ""):
+    global _COMMAND
+    _COMMAND = cmd
     # Pure literal output is documentation, not a command inside its text.
     # Keep substitutions, redirections, compound commands, and scripts guarded.
     if not any(char in cmd for char in ("$", "`", "\n", "\r")):
@@ -949,7 +1106,7 @@ def decide(cmd: str, cwd: str = ""):
             if all(kind == "w" for kind, _ in toks):
                 return "allow", ""
     shell, code = _split_heredocs(cmd)
-    if SECRET_RE.search(code):
+    if _mentions_secret(code, cwd):
         return "deny", R_SECRET
     if any(re.search(p, shell, re.I) for p in SECRET_COMMANDS):
         return "deny", R_ENV
@@ -969,14 +1126,16 @@ JS_COMMAND = re.compile(
 
 def decide_patch(patch: str, cwd: str = ""):
     """apply_patch (Codex) or Edit/Write: deny a patch that touches a secret path."""
-    if any(SECRET_RE.search(p) for p in PATCH_PATH.findall(patch)):
+    if any(_mentions_secret(p, cwd) for p in PATCH_PATH.findall(patch)):
         return "deny", R_SECRET
     return "allow", ""
 
 
 def decide_code(code: str, cwd: str = ""):
     """Codex js (node REPL) code: deny secret mentions; judge shell commands it runs."""
-    if SECRET_RE.search(code):
+    global _COMMAND
+    _COMMAND = code
+    if _mentions_secret(code, cwd):
         return "deny", R_SECRET
     v = Verdict()
     for _, cmd in JS_COMMAND.findall(code):
@@ -1015,7 +1174,7 @@ def route(data: dict):
         if isinstance(text, list):
             text = "\n".join(map(str, text))
         paths = _joined_paths(data, ti)
-        if paths.strip() and SECRET_RE.search(paths):
+        if paths.strip() and _mentions_secret(paths, cwd):
             return "deny", R_SECRET
         return decide_patch(str(text), cwd)
     if tool in ("js", "node_repl", "js_repl") or ("code" in ti and not _command(data)):
