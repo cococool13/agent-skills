@@ -4,7 +4,10 @@
 # 2. Updates only lock entries that carry a `ref` (pinned sha), with the pinned local
 #    skills CLI (~/.local/share/skills, skills@1.7.5). No -y. Unpinned skills wait for a
 #    manual `skills update <name>` after review.
-# 3. Restores overlays, then audits the library.
+# 3. Reapplies instruction overrides, then overlays. Overrides go first because
+#    post-update-patches.py stops while emil-design-eng still has its
+#    "Initial Response" section, and the override removes that section.
+# 4. Audits the library.
 # --dry-run: report and checks only; changes nothing in ~/.agents/skills.
 set -euo pipefail
 
@@ -46,8 +49,9 @@ run() {
     "$SKILLS" update -g "${pinned[@]}" </dev/null || update_status=$?
   fi
   python3 "${MAINTENANCE_DIR}/sync-claude-skills.py"
-  python3 "${MAINTENANCE_DIR}/post-update-patches.py"
+  # Overrides first: the overlay stops if emil-design-eng still has "## Initial Response".
   python3 "${MAINTENANCE_DIR}/apply-instruction-overrides.py"
+  python3 "${MAINTENANCE_DIR}/post-update-patches.py"
   python3 "${MAINTENANCE_DIR}/audit-context.py"
   python3 "${MAINTENANCE_DIR}/prune-cursor-scan-paths.py"
   if [ "$update_status" -ne 0 ]; then

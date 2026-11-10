@@ -13,7 +13,8 @@ Skip this phase when the build has no existing product to learn from.
 
 - Use the `reverse-engineer-anything` skill (REA MCP).
 - Legal scope: websites, public docs, and network traffic of software Cohen is licensed to use. Decompile native binaries only where the license allows it.
-- Output: a short findings note in the repo (`brief/findings.md`) with features, flows, and data shapes. Not copied code or assets.
+- Find the 10 complaints that show up most in reviews and forums for this product and its closest rivals, and quote the users with a link to each source. Use `web-research-routing` to pick the tool.
+- Output: a short findings note in the repo (`brief/findings.md`) with features, flows, data shapes, and those complaints. Not copied code or assets.
 
 ## 2. Pick design references
 
