@@ -112,18 +112,24 @@ def _brace_expand(glob: str) -> list:
     return out
 
 
+SIMPLE_GLOB = re.compile(r"^[a-z0-9._*?-]+$")  # the only glob syntax fnmatch and ripgrep agree on
+
+
 def _glob_hits(relative: str, globs) -> bool:
     """True when an include glob could select this path. Errs towards True.
 
     Only the glob's last component is used, and it is tried against every
     component of the path, because a glob that names a directory selects
-    everything below it.
+    everything below it. Classes, escapes, spaces and heavy brace use are
+    not interpreted: such a glob is taken to select everything.
     """
     parts = [part for part in relative.lower().split(os.sep) if part]
     for glob in globs:
-        for candidate in _brace_expand(glob.replace("\\", "")):
+        if len(glob) > 200 or glob.count("{") > 2 or glob.count(",") > 12:
+            return True
+        for candidate in _brace_expand(glob):
             base = candidate.rstrip("/").rsplit("/", 1)[-1].lower().replace("**", "*")
-            if not base or base == "*" or "{" in base or "}" in base:
+            if not base or base == "*" or not SIMPLE_GLOB.match(base):
                 return True
             if any(fnmatch.fnmatchcase(part, base) for part in parts):
                 return True
@@ -131,7 +137,9 @@ def _glob_hits(relative: str, globs) -> bool:
 
 
 def _git(scope: str, *args):
-    result = subprocess.run(["git", "-C", scope, *args], capture_output=True, timeout=5)
+    # ripgrep matches ignore patterns case-sensitively; make git answer the same way.
+    result = subprocess.run(["git", "-c", "core.ignorecase=false", "-C", scope, *args],
+                            capture_output=True, timeout=5)
     return result.returncode, result.stdout
 
 

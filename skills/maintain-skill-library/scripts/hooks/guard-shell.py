@@ -50,11 +50,10 @@ PROJECT_SETTINGS = re.compile(r"\.claude/settings\.json$", re.I)
 TOKEN_EDGE = " \t\r\n'\"`()=,;<>|&"
 # A token the shell may rewrite (brace, glob, variable, xargs placeholder) is never exempt.
 TOKEN_META = set("{}*?[]$\\%!^~")
-# Ways a command can read relative paths from somewhere other than the hook's cwd.
-CWD_SHIFT = re.compile(
-    r"(^|[\s;&|(`'\"])(eval|source|xargs|find|chdir|\.)\s|\s-C\b|--(directory|git-dir|work-tree|cwd|chdir|prefix)\b"
-    r"|chdir\s*\(|\bcwd\s*[:=]|expanduser|homedir|\bhome\b|~|/Users/|/home/", re.I)
-_COMMAND = ""  # the whole text under judgement, for CWD_SHIFT
+# A relative path is trusted only in one plain command from this list (see _simple_command).
+SIMPLE_READERS = {"cat", "head", "tail", "less", "ls", "wc", "diff", "jq", "sed", "grep", "rg",
+                  "code", "open", "touch", "mkdir", "git"}
+_COMMAND = ""  # the whole text under judgement, for _simple_command
 
 HEREDOC = re.compile(r"(?<!<)<<-?(?!<)\s*(['\"]?)([A-Za-z_][\w-]*)\1")
 SHELL_FED = re.compile(r"\b(sh|bash|zsh|dash|ksh|ssh|eval|source|xargs)\b")
@@ -110,7 +109,10 @@ SCRATCH_ROOT = HOME + "/Library/Application Support/Claude/scratch-workspaces/" 
 
 SCRIPT_WORD = re.compile(r"(?<![a-z])(deploy|release|publish|ship)(?![a-z])", re.I)
 # A script named for checking a deploy is not a deploy: check-dmg-release.sh, deploy.test.js, release-notes.
-SAFE_SCRIPT_WORD = re.compile(r"(?<![a-z])(tests?|spec|check|lint|verify|notes|dry-?run|status|plan)(?![a-z])", re.I)
+SAFE_SCRIPT_WORD = re.compile(
+    r"(\.(test|spec)\.\w+$|^(tests?|check|lint|verify)[-_:.]"
+    r"|(deploy|release|publish|ship)[-_:]?(notes|status|plan|check|dry-?run)(?![a-z]))", re.I)
+JOINED_SCRIPT_WORD = re.compile(r"(?<![a-z])(and|then)(?![a-z])", re.I)  # check-then-publish.sh does publish
 SCRIPT_EXT = re.compile(r"\.(sh|bash|zsh|py|js|mjs|cjs|ts|rb|pl)$", re.I)
 DROP_SQL = re.compile(r"\bdrop\s+(database|table)\b", re.I)
 SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "fish"}
@@ -142,6 +144,7 @@ R_ASK = "Deploy, release, publish, submit, merge, remote write, or destructive g
 class Verdict:
     def __init__(self):
         self.decision, self.reason = "allow", ""
+        self.names = set()  # every command name seen, for whole-text rules
 
     def add(self, decision, reason):
         if LEVEL[decision] > LEVEL[self.decision]:
@@ -149,6 +152,7 @@ class Verdict:
 
     def merge(self, other):
         self.add(other.decision, other.reason)
+        self.names |= other.names
 
 
 def _split_heredocs(cmd: str):
@@ -559,15 +563,27 @@ def _mentions_secret(text, cwd=None) -> bool:
     return False
 
 
+def _simple_command(text) -> bool:
+    """One plain file command: no pipe, list, substitution, redirect, variable, directory flag or '..'."""
+    if not text or any(ch in text for ch in ";&|`$\n\r<>(){}\\"):
+        return False
+    words = [word for _, word in _lex(text)]
+    if not words or words[0] not in SIMPLE_READERS:
+        return False
+    return not any(".." in word.split("/") or word.startswith(("-C", "-c", "--git-dir", "--work-tree",
+                                                                "--exec-path", "--namespace"))
+                   for word in words[1:])
+
+
 def _project_file(token, cwd) -> bool:
     """The path provably resolves inside a project or temp folder, not to a protected client config.
 
-    A relative path counts only when nothing in the command can move the directory it is read from.
+    A relative path counts only in one plain command, where nothing can move the directory it is read from.
     """
     if not cwd or ".." in token.split("/"):
         return False
     absolute = token.startswith(("/", "~/"))
-    if not absolute and CWD_SHIFT.search(_COMMAND):
+    if not absolute and not _simple_command(_COMMAND):
         return False
     path = _expand(token, cwd)
     if path is None or not path.startswith("/"):
@@ -834,7 +850,7 @@ def _git_verdict(args):
         i += 1
     sub, rest = (args[i] if i < len(args) else ""), args[i + 1:]
     if sub == "push":
-        level, pos, j, lease = "allow", [], 0, False
+        level, pos, j, lease, wide = "allow", [], 0, False, False
         while j < len(rest):
             a = rest[j]
             if a == "--":
@@ -846,6 +862,7 @@ def _git_verdict(args):
                     return "deny", R_FORCE
                 if n in ("--force-with-lease", "--force-if-includes"):
                     lease = True  # refuses to overwrite unseen work: ask, except on main
+                wide |= n in ("--all", "--mirror", "--branches", "--tags")
                 if n in ("--delete", "--mirror", "--prune"):
                     level = "ask"
                 if n in ("--repo", "--receive-pack", "--exec", "--push-option") and "=" not in a:
@@ -865,7 +882,9 @@ def _git_verdict(args):
         if any(r.startswith("+") for r in pos):
             return "deny", R_FORCE
         if lease:
-            if any(r.split(":")[-1].split("/")[-1] in ("main", "master") for r in pos[1:]):
+            # Only a named branch other than main can be approved; HEAD or no refspec may be main.
+            targets = [r.split(":")[-1].split("/")[-1].lower() for r in pos[1:]]
+            if wide or not targets or any(t in ("main", "master", "head", "@", "") for t in targets):
                 return "deny", R_FORCE
             level = "ask"
         if any(r.startswith(":") for r in pos):
@@ -921,7 +940,7 @@ def _deploy_named(text) -> bool:
     if not parts:
         return False
     base = parts[-1]
-    if SAFE_SCRIPT_WORD.search(base):
+    if SAFE_SCRIPT_WORD.search(base) and not JOINED_SCRIPT_WORD.search(base):
         return False
     if SCRIPT_WORD.search(base):
         return True
@@ -932,9 +951,8 @@ def _deploy_named(text) -> bool:
 
 
 def _ask_command(name, argv0, args) -> bool:
-    if name in ("vercel", "netlify"):
-        return True  # parked hosts: any use needs Cohen
-    if name not in TEXT_ONLY and DROP_SQL.search(" ".join(args)):
+    # Parked hosts: any use needs Cohen, also through a wrapper (yarn vercel, doppler run -- vercel).
+    if name in ("vercel", "netlify") or (name not in TEXT_ONLY and any(a in ("vercel", "netlify") for a in args)):
         return True
     if name == "curl":
         return _curl_writes(args) and not _curl_local(args)
@@ -1038,6 +1056,7 @@ def analyze(text: str, cwd, depth=0, in_subst=False) -> Verdict:
             if not in_subst:
                 cwd = _cd(args, cwd)
             continue
+        v.names.add(name)
         same_pipe = [j for j, s in enumerate(segs) if s["pipe"] == seg["pipe"] and j != idx]
         runner = any(norm[j][1] or (norm[j][0] and _name(norm[j][0][0]) in RUNNERS) for j in same_pipe)
         secret_reason = _secret_verdict(argv0, name, args, seg["redirs"], in_subst, runner, cwd)
@@ -1113,6 +1132,9 @@ def decide(cmd: str, cwd: str = ""):
     v = analyze(shell, cwd or None)
     if v.decision != "deny" and any(re.search(p, shell, re.I) for p in ASK):
         v.add("ask", R_ASK)
+    # SQL that reaches a database client by argument, pipe or here-string; not text git or grep only stores.
+    if DROP_SQL.search(shell) and not v.names <= TEXT_ONLY:
+        v.add("ask", R_ASK)
     if v.decision == "ask" and _consume_approval(cwd, cmd):
         return "allow", ""
     return v.decision, v.reason
@@ -1164,6 +1186,8 @@ def _joined_paths(data, ti) -> str:
 def route(data: dict):
     if data.get("toolInputTruncated") is True or data.get("tool_input_truncated") is True:
         return "deny", R_TRUNCATED
+    global _COMMAND
+    _COMMAND = ""
     tool = str(data.get("tool_name") or data.get("toolName") or "")
     ti = data.get("toolInput") or data.get("tool_input") or {}
     if not isinstance(ti, dict):

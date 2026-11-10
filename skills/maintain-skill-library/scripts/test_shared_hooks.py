@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -262,8 +263,24 @@ class SharedHookTests(unittest.TestCase):
                 with self.subTest(glob=glob):
                     native['tool_input']['glob'] = glob
                     self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
-            # ripgrep's own ignore files outrank .gitignore, and a second .git ends the parent's rules.
+            # Second review, 2026-11-10: glob syntax the check cannot interpret selects everything,
+            # and a glob too large to expand is refused quickly.
+            for glob in ('.en[^x]', 'prod.en[^x]', 'prod.env ', '{a,b}' * 18):
+                with self.subTest(glob=glob):
+                    started = time.monotonic()
+                    self.assertEqual(self.decision(self.shell(f"rg -g '{glob}' TODO", cwd=directory)), 'deny')
+                    native['tool_input']['glob'] = glob
+                    self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+                    self.assertLess(time.monotonic() - started, 5)
+            self.assertEqual(self.decision(self.shell("grep -r --include='.en[^x]' TODO .", cwd=directory)), 'deny')
+            # ripgrep matches ignore patterns case-sensitively even where git does not.
+            (root / '.gitignore').write_text('.env\nvendor/\nprod.env\nSecrets.ENV\n')
+            (root / 'secrets.env').touch(mode=0o000)
             del native['tool_input']['glob']
+            self.assertEqual(self.decision(self.shell('rg TODO', cwd=directory)), 'deny')
+            self.assertEqual(self.decision(self.run_hook('deny-env-read.py', native)), 'deny')
+            (root / 'secrets.env').unlink()
+            # ripgrep's own ignore files outrank .gitignore, and a second .git ends the parent's rules.
             for marker in ('.ignore', '.rgignore', 'src/.ignore'):
                 with self.subTest(marker=marker):
                     (root / marker).write_text('!prod.env\n')

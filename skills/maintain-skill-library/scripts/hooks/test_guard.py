@@ -99,6 +99,16 @@ FP_ASK = [
     "npm run deploy",
     "node scripts/deploy.js",
     "wrangler deploy --env production",
+    # Second review (2026-11-10): a wrapper, a pipe or a joined script name must not hide the action.
+    "yarn vercel deploy --prod",
+    "pnpm vercel --prod",
+    "npm run vercel",
+    "doppler run -- vercel deploy",
+    "echo 'drop table users' | psql",
+    "sqlite3 app.db <<< 'drop table users'",
+    "./deploy-and-verify.sh",
+    "npm run deploy:verify",
+    "./scripts/check-then-publish.sh",
 ]
 FP_DENY = [
     "cat ~/.claude/settings.json",
@@ -107,8 +117,18 @@ FP_DENY = [
     "cat fleet-key.pem",
     "cat ~/.ssh/id_ed25519",
     "cp .env /tmp/copy.txt",
-    "rg --no-ignore TODO ~/.codex",
-    "rg -g '*.json' TODO ~/.claude",
+    # Second review (2026-11-10): a relative settings path is trusted only in one plain command.
+    'echo "$(cd ../.. && cat .claude/settings.json)"',
+    "tar cfC - ../.. .claude/settings.json",
+    "tar cf - --cd ../.. .claude/settings.json",
+    "popd; cat .claude/settings.json",
+    "git -C ~ diff .claude/settings.json",
+    "node -e \"console.log(require('fs').readFileSync(require('path').resolve('..','..','.claude/settings.json'),'utf8'))\"",
+    # A lease push that names no branch, or one that may be main, cannot be approved.
+    "git push --force-with-lease",
+    "git push --force-with-lease origin HEAD",
+    "git push --force-with-lease --all",
+    "git push --force-with-lease origin feat:MAIN",
     # Red-team pass on the audit's own exemptions (2026-11-10): each of these slipped through a first draft.
     "cat id_rsa{.pub,}",
     "cat .env{.example,}",
