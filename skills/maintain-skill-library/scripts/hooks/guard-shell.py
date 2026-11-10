@@ -125,9 +125,9 @@ PATTERN_TOOLS = {"grep", "egrep", "fgrep", "rg", "ag", "ack", "sed", "awk", "gaw
 # Commands whose arguments are text to store, show or search for, not SQL to run.
 TEXT_ONLY = PATTERN_TOOLS | {"git", "gh", "echo", "printf", "ls", "cat", "open", "head", "tail", "wc", "sort",
                              "uniq", "cut", "less"}
-PARKED_HOSTS = ("vercel", "netlify", "netlify-cli")
+PARKED_HOSTS = ("vercel", "netlify", "netlify-cli", "vc", "ntl")
 # Commands that only name a thing: which vercel, mkdir vercel, npm uninstall vercel.
-NAME_ONLY = {"which", "mkdir", "find", "rm", "rmdir", "mv", "cp", "touch", "cd"}
+NAME_ONLY = {"which", "mkdir", "rm", "rmdir", "mv", "cp", "touch", "cd"}
 PACKAGE_EDITS = {"install", "i", "add", "uninstall", "remove", "rm", "un", "ls", "list", "why", "view", "info",
                  "outdated", "update", "up"}
 PATTERN_VALUE_FLAGS = {
@@ -585,7 +585,9 @@ def _simple_command(text) -> bool:
             return False
         if not words or words[0] not in SIMPLE_READERS or any(".." in word.split("/") for word in words):
             return False
-        if words[0] == "git" and any(word.startswith(GIT_DIR_FLAGS) for word in words[1:]):
+        # git can move directory by flag, and by an alias it was just given.
+        if words[0] == "git" and any(word.startswith(GIT_DIR_FLAGS + ("!",)) or word == "config" or "alias." in word
+                                     for word in words[1:]):
             return False
     return True
 
@@ -971,7 +973,7 @@ def _deploy_named(text) -> bool:
 
 def _ask_command(name, argv0, args) -> bool:
     # Parked hosts: any use needs Cohen, also through a wrapper (yarn vercel, doppler run -- vercel).
-    if name in PARKED_HOSTS + ("vc", "ntl"):
+    if name in PARKED_HOSTS:
         return True
     if any(a in PARKED_HOSTS for a in args) and name not in TEXT_ONLY | NAME_ONLY and not (
             name in ("npm", "yarn", "pnpm", "bun") and args[0] in PACKAGE_EDITS):

@@ -121,6 +121,9 @@ FP_ASK = [
     'psql -c "DROP ""TABLE users"',
     "wrangler d1 execute db --command 'dr''op table x'",
     "npx netlify-cli deploy --prod",
+    "find . -maxdepth 0 -exec vercel deploy --prod ';'",
+    "yarn vc --prod",
+    "doppler run -- vc --prod",
     "./deploy-plan-apply.sh",
     "./release-notes-publish.sh",
 ]
@@ -149,6 +152,7 @@ FP_DENY = [
     "git tag -F" + HOME + "/.claude/settings.json v1",
     "open file://" + HOME + "/.claude/settings.json",
     "cat .claude/settings.json | (cd ~; cat .claude/settings.json)",
+    "git config alias.t '!git -C " + HOME + " diff --no-index /dev/null' && git t .claude/settings.json",
     # Red-team pass on the audit's own exemptions (2026-11-10): each of these slipped through a first draft.
     "cat id_rsa{.pub,}",
     "cat .env{.example,}",
