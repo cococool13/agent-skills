@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# ci-par [--pre r1,r2] recipe...
+# Runs `just <recipe>` for every recipe at once, one log each, then prints a
+# timing table. On failure: the failing log tail, the first error line it can
+# find (file:line when there is one) and the exact rerun command.
+# --pre recipes run first, one at a time (dependency installs).
+set -uo pipefail
+
+pre=()
+if [[ "${1:-}" == "--pre" ]]; then
+  IFS=, read -ra pre <<<"$2"
+  shift 2
+fi
+[[ $# -gt 0 ]] || { echo "usage: ci-par [--pre a,b] recipe..." >&2; exit 2; }
+
+logs="$(mktemp -d "${TMPDIR:-/tmp}/ci-par.XXXXXX")"
+trap 'rm -rf "$logs"' EXIT
+start=$EPOCHREALTIME
+
+table=""
+for r in "${pre[@]}"; do
+  s=$EPOCHREALTIME
+  if ! just "$r" >"$logs/pre-$r.log" 2>&1; then
+    echo "----- $r (last 40 lines) -----" >&2
+    tail -n 40 "$logs/pre-$r.log" >&2
+    echo "rerun: just $r" >&2
+    exit 1
+  fi
+  table+="$(printf 'ok    %-22s %6.1fs  (first, alone)' "$r" "$(bc <<<"$EPOCHREALTIME - $s")")"$'\n'
+done
+
+for r in "$@"; do
+  (
+    s=$EPOCHREALTIME
+    just "$r" >"$logs/$r.log" 2>&1
+    rc=$?
+    printf '%s %.1f\n' "$rc" "$(bc <<<"$EPOCHREALTIME - $s")" >"$logs/$r.rc"
+  ) &
+done
+wait
+
+first_error() {
+  # file:line first, then the usual failure words.
+  grep -m1 -E '[A-Za-z0-9_./-]+\.[A-Za-z]{1,6}:[0-9]+' "$1" \
+    || grep -m1 -iE '(^|[^a-z])(error|fail(ed|ure)?|✗|✘)([^a-z]|$)' "$1" \
+    || tail -n 1 "$1"
+}
+
+fail=0
+for r in "$@"; do
+  read -r rc secs <"$logs/$r.rc"
+  if [[ "$rc" == 0 ]]; then
+    table+="$(printf 'ok    %-22s %6ss' "$r" "$secs")"$'\n'
+  else
+    fail=1
+    table+="$(printf 'FAIL  %-22s %6ss' "$r" "$secs")"$'\n'
+  fi
+done
+
+for r in "$@"; do
+  read -r rc _ <"$logs/$r.rc"
+  [[ "$rc" == 0 ]] && continue
+  echo "----- $r (last 40 lines) -----" >&2
+  tail -n 40 "$logs/$r.log" >&2
+  echo "first error: $(first_error "$logs/$r.log")" >&2
+  echo "rerun: just $r" >&2
+done
+
+total="$(printf '%.1f' "$(bc <<<"$EPOCHREALTIME - $start")")"
+printf '%stotal %ss\n' "$table" "$total"
+
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  {
+    echo '```'
+    printf '%stotal %ss\n' "$table" "$total"
+    echo '```'
+    for r in "$@"; do
+      read -r rc _ <"$logs/$r.rc"
+      [[ "$rc" == 0 ]] || echo "- **$r**: \`$(first_error "$logs/$r.log")\` — rerun \`just $r\`"
+    done
+  } >>"$GITHUB_STEP_SUMMARY"
+fi
+exit "$fail"

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# ci-status [rev]   (default HEAD)
+# Posts the GitHub commit status `ci/just-check` = success for a commit, but
+# only when ci-check left a pass receipt for that exact commit. Branch
+# protection requires this status, so GitHub refuses a merge without it.
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+sha="$(git -C "$root" rev-parse "${1:-HEAD}^{commit}")"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/ci"
+slug="$(git -C "$root" remote get-url origin | sed -E 's#.*github\.com[:/]##; s#\.git$##')"
+receipt="$cache/receipts/${slug//\//__}/$sha"
+[[ -f "$receipt" ]] || { echo "ci-status: no pass receipt for $sha; run ci-check first" >&2; exit 1; }
+gh api -X POST "repos/$slug/statuses/$sha" \
+  -f state=success -f context=ci/just-check \
+  -f description="just check passed: $(cut -c1-100 "$receipt")" >/dev/null
+echo "ci-status: ci/just-check=success on $slug@${sha:0:9}"

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# lefthook pre-push entry (use_stdin: true). Runs ci-check on every branch tip
+# being pushed. Tags, notes and deletions are skipped.
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+checked=0
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+  [[ -n "${local_sha:-}" && ! "$local_sha" =~ ^0+$ ]] || continue
+  [[ "$local_ref" == refs/heads/* ]] || continue
+  "$here/ci-check" "$local_sha"
+  checked=1
+done
+[[ "$checked" == 1 ]] || echo "ci: nothing to check in this push"
