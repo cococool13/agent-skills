@@ -1,0 +1,96 @@
+// Shared oxlint policy for every repo (vendored as .ci/oxlint/base.jsonc).
+// A repo's .oxlintrc.jsonc extends this, adds the plugins its stack needs
+// (react, react-perf, jsx-a11y, vitest, jest, nextjs, vue) and may turn a rule
+// off only with a reason on the same line.
+//
+// Every category is on as an error, nursery excepted (unstable by definition).
+// Run with --type-aware so the typescript rules that need types run too.
+// A rule below is off for one of four reasons, written next to it:
+//   pair     it contradicts another rule here, so both cannot pass
+//   feature  it bans a core language feature the code is written in
+//   format   the formatter (biome / prettier) owns it, or the two disagree
+//   size     an arbitrary size or count cap with no bug signal
+{
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "import", "promise", "node", "jsdoc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error",
+    "style": "error",
+    "restriction": "error"
+  },
+  "rules": {
+    "eslint/no-ternary": "off",                       // feature
+    "eslint/no-nested-ternary": "off",                // pair: unicorn/no-nested-ternary allows one level and autofixes
+    "eslint/no-undefined": "off",                     // feature
+    "eslint/no-plusplus": "off",                      // feature
+    "eslint/no-bitwise": "off",                       // feature: hashing, crypto, flags
+    "eslint/no-continue": "off",                      // feature
+    "eslint/func-style": "off",                       // pair: function declarations and arrow constants both used by design
+    "eslint/one-var": "off",                          // format
+    "eslint/sort-keys": "off",                        // format: key order carries meaning (schemas, config)
+    "eslint/sort-imports": "off",                     // format: the formatter organizes imports
+    "eslint/capitalized-comments": "off",             // format
+    "eslint/id-length": "off",                        // size
+    "eslint/no-magic-numbers": "off",                 // size: flags every literal 2, 60, 1000
+    "eslint/max-statements": "off",                   // size
+    "eslint/max-lines": "off",                        // size
+    "eslint/max-lines-per-function": "off",           // size
+    "eslint/max-params": "off",                       // size
+    "eslint/max-depth": "off",                        // size
+    "eslint/complexity": "off",                       // size
+    "eslint/init-declarations": "off",                // pair: conflicts with no-undef-init
+    "eslint/no-await-in-loop": "off",                 // feature: sequential awaits are deliberate (ordering, rate limits)
+    "eslint/prefer-named-capture-group": "off",       // format
+    "eslint/no-use-before-define": ["error", { "functions": false, "classes": true, "variables": true }],
+    "import/no-named-export": "off",                  // pair: import/no-default-export
+    "import/prefer-default-export": "off",            // pair: import/no-default-export
+    "import/group-exports": "off",                    // pair: inline exports
+    "import/exports-last": "off",                     // format
+    "import/no-relative-parent-imports": "off",       // feature
+    "import/no-nodejs-modules": "off",                // feature: node: builtins are the platform (Workers nodejs_compat, scripts)
+    "import/max-dependencies": "off",                 // size
+    "oxc/no-async-await": "off",                      // pair: promise/prefer-await-to-then
+    "oxc/no-optional-chaining": "off",                // feature
+    "oxc/no-rest-spread-properties": "off",           // feature
+    "unicorn/no-null": "off",                         // feature: DOM, JSON and SQL APIs return null
+    "unicorn/number-literal-case": "off",             // format: biome lowercases hex, this wants upper
+    "unicorn/max-nested-calls": "off",                // size
+    "unicorn/no-await-expression-member": "off",      // feature
+    "typescript/prefer-readonly-parameter-types": "off", // size: needs DeepReadonly on every parameter, including library types
+    "typescript/explicit-function-return-type": "off",   // pair: typescript/explicit-module-boundary-types covers exports
+    "typescript/explicit-member-accessibility": "off",   // pair: #private fields
+    "typescript/parameter-properties": "off",            // pair: parameter properties are allowed by explicit-member-accessibility users
+    "promise/avoid-new": "off",                       // feature: wrapping callback APIs needs new Promise
+    "node/no-process-env": "off",                     // feature: env is how scripts and tests are configured
+    "node/no-top-level-await": "off",                 // feature: ESM
+    "node/no-sync": "off",                            // feature: build and test scripts
+    "jsdoc/require-param": "off",                     // pair: TypeScript types document parameters
+    "jsdoc/require-returns": "off",                   // pair: TypeScript types document returns
+    // Plugins a repo adds itself; these settings apply only when it does.
+    "react/react-in-jsx-scope": "off",                // pair: the automatic JSX runtime needs no React import
+    "react/jsx-filename-extension": "off",            // pair: .tsx is the TypeScript JSX extension
+    "react/jsx-max-depth": "off",                     // size
+    "react/jsx-no-literals": "off",                   // feature: no i18n layer
+    "react/no-multi-comp": "off",                     // size
+    "vitest/prefer-expect-assertions": "off",         // size: expect.assertions(n) in every test
+    "vitest/require-test-timeout": "off",             // size: the config sets one timeout
+    "vitest/require-hook": "off",                     // feature: module-level fixtures
+    "vitest/max-expects": "off",                      // size
+    "vitest/padding-around-test-blocks": "off",       // format
+    "vitest/prefer-lowercase-title": "off",           // format
+    "vitest/no-importing-vitest-globals": "off",      // pair: globals are off, so tests import from vitest
+    "vitest/no-hooks": "off",                         // feature
+    "vitest/require-top-level-describe": "off"        // feature: a file is the suite
+  },
+  "overrides": [
+    {
+      "files": ["**/*.test.*", "**/*.spec.*", "tests/**", "test/**", "e2e/**", "scripts/**", "**/*.config.*"],
+      "rules": {
+        "eslint/no-console": "off",                   // feature: scripts and tests report to the console
+        "typescript/explicit-module-boundary-types": "off"
+      }
+    }
+  ]
+}

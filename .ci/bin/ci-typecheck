@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# ci-typecheck [-b] [project...]   (default: the repo's root tsconfig.json)
+# Type checks with `bun check` (tsc's errors, every core) instead of tsc.
+# Each project is a tsconfig.json or its directory, relative to the repo root;
+# they run at once. -b also checks projects in references, like tsc -b.
+# Runs from outside the package: a package.json "check" script would otherwise
+# shadow the built-in `bun check`.
+set -uo pipefail
+root="$(git rev-parse --show-toplevel)"
+flags=(--no-pretty)
+[[ "${1:-}" == "-b" ]] && { flags+=(-b); shift; }
+projects=("$@")
+[[ ${#projects[@]} -gt 0 ]] || projects=(tsconfig.json)
+pids=()
+for p in "${projects[@]}"; do
+  # From /, bun prints paths as Users/...; strip that back to repo-relative.
+  (cd / && bun check "${flags[@]}" -p "$root/$p" 2>&1 | sed -e "s#^/*${root#/}/##" -e "s# /*${root#/}/# #g"; exit "${PIPESTATUS[0]}") &
+  pids+=($!)
+done
+rc=0
+for pid in "${pids[@]}"; do wait "$pid" || rc=1; done
+exit $rc

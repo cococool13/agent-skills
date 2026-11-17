@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ci-sync [--check] [repo-dir]   (default: current repo)
-# Copies the canonical kit (bin/, hooks/) into <repo>/.ci/ so every clone,
+# Copies the canonical kit (bin/, hooks/, oxlint/) into <repo>/.ci/ so every clone,
 # cloud agent and the box has the same scripts. --check only reports drift
 # and exits 1 when the vendored copy differs. Never deletes files.
 set -euo pipefail
@@ -12,7 +12,7 @@ repo="$(git -C "${1:-.}" rev-parse --show-toplevel)"
 
 if [[ "$check" == 1 ]]; then
   drift=0
-  for d in bin hooks; do
+  for d in bin hooks oxlint; do
     diff -rq "$kit/$d" "$repo/.ci/$d" || drift=1
   done
   [[ "$drift" == 0 ]] && echo "ci-sync: .ci matches $kit" || echo "ci-sync: drift; run ci-sync $repo" >&2
@@ -20,8 +20,8 @@ if [[ "$check" == 1 ]]; then
 fi
 
 mkdir -p "$repo/.ci"
-for d in bin hooks; do
+for d in bin hooks oxlint; do
   mkdir -p "$repo/.ci/$d"
   cp -p "$kit/$d/"* "$repo/.ci/$d/"
 done
-echo "ci-sync: copied $kit/{bin,hooks} into $repo/.ci"
+echo "ci-sync: copied $kit/{bin,hooks,oxlint} into $repo/.ci"

@@ -53,10 +53,12 @@ sha="$(git rev-parse HEAD)"
 run git push -q -u origin "$branch"
 run "$here/ci-status" "$sha"
 
-pr="$(gh pr view "$branch" --json number -q .number 2>/dev/null || true)"
+# Open PRs only: an old merged PR from a reused branch name must not be picked up.
+open_pr() { gh pr list --head "$branch" --state open --json number -q '.[0].number // empty' 2>/dev/null || true; }
+pr="$(open_pr)"
 if [[ -z "$pr" ]]; then
   run gh pr create --fill --head "$branch" --base "$default"
-  [[ "$dry" == 1 ]] || pr="$(gh pr view "$branch" --json number -q .number)"
+  [[ "$dry" == 1 ]] || pr="$(open_pr)"
 fi
 [[ -n "$pr" && -x "$HOME/.agents/pr-claim" ]] && run "$HOME/.agents/pr-claim" claim "$repo" "$pr" "${CI_BOT:-agent}" "$sha"
 

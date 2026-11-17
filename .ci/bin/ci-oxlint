@@ -1,0 +1,70 @@
+#!/usr/bin/env bun
+// ci-oxlint [--dir pkg] [--init | --update] [oxlint args...]
+// Runs oxlint (type-aware, the repo's .oxlintrc.jsonc) with a ratchet:
+// .oxlint-baseline.json records how many hits each file has per rule from
+// before every rule was turned on. A hit above that count fails, so new code
+// passes every rule while old hits can only go down.
+//   --init    write the baseline (only when none exists)
+//   --update  lower the baseline to the current counts; refuses to raise any
+//   --dir     run in a package subdirectory (its oxlint, config and baseline)
+import { $ } from "bun";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+
+const args = process.argv.slice(2);
+let dir = ".";
+if (args[0] === "--dir") { dir = args[1]; args.splice(0, 2); }
+const mode = args[0] === "--init" || args[0] === "--update" ? args.shift() : "check";
+const root = (await $`git rev-parse --show-toplevel`.text()).trim();
+process.chdir(`${root}/${dir}`);
+const config = existsSync(".oxlintrc.jsonc") ? ".oxlintrc.jsonc" : ".oxlintrc.json";
+const file = ".oxlint-baseline.json";
+
+const run = await $`npx --no-install oxlint --type-aware -c ${config} -f json ${args} .`.nothrow().quiet();
+let diags: { code: string; message: string; filename: string; labels?: { span?: { line?: number } }[] }[];
+try {
+  diags = JSON.parse(run.stdout.toString()).diagnostics;
+} catch {
+  console.error(run.stderr.toString() || run.stdout.toString());
+  console.error("ci-oxlint: oxlint did not produce a report");
+  process.exit(2);
+}
+const key = (d: (typeof diags)[number]) => `${d.filename}::${d.code}`;
+const now: Record<string, number> = {};
+for (const d of diags) now[key(d)] = (now[key(d)] ?? 0) + 1;
+const sorted = (o: Record<string, number>) => Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b)));
+
+if (mode === "--init") {
+  if (existsSync(file)) { console.error(`ci-oxlint: ${file} exists; use --update`); process.exit(2); }
+  writeFileSync(file, JSON.stringify(sorted(now), null, 1) + "\n");
+  console.log(`ci-oxlint: baselined ${diags.length} existing hits in ${Object.keys(now).length} file/rule pairs`);
+  process.exit(0);
+}
+
+const base: Record<string, number> = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
+const over = Object.keys(now).filter((k) => now[k] > (base[k] ?? 0));
+
+if (mode === "--update") {
+  if (over.length) {
+    console.error(`ci-oxlint: refusing to raise the baseline; fix these first:\n${over.join("\n")}`);
+    process.exit(1);
+  }
+  writeFileSync(file, JSON.stringify(sorted(now), null, 1) + "\n");
+  const was = Object.values(base).reduce((a, b) => a + b, 0);
+  console.log(`ci-oxlint: baseline ${was} -> ${diags.length} hits`);
+  process.exit(0);
+}
+
+const baselined = Object.values(base).reduce((a, b) => a + b, 0);
+if (over.length) {
+  for (const k of over) {
+    const [f, code] = k.split("::");
+    console.log(`${f}: ${now[k]} ${code} (baseline ${base[k] ?? 0})`);
+    for (const d of diags.filter((x) => key(x) === k)) {
+      console.log(`  ${f}:${d.labels?.[0]?.span?.line ?? "?"} ${d.message}`);
+    }
+  }
+  console.log(`ci-oxlint: FAIL ${over.length} file/rule pair(s) above the baseline`);
+  process.exit(1);
+}
+const gone = baselined - diags.length;
+console.log(`ci-oxlint: ok, no new hits (${diags.length} baselined${gone > 0 ? `, ${gone} fixed: run ci-oxlint --update` : ""})`);
