@@ -3,6 +3,9 @@
 # Runs design-guard's taste-guard.sh at that release on the current repo.
 # The release is exported (git archive) into ~/.cache/ci/design-guard/<sha>, so
 # whatever branch the local Design Guard checkout is on never changes results.
+# taste-guard scans with --no-ignore (a fresh CI checkout has no ignored files),
+# so it runs on a copy of the files git would commit: tracked plus untracked
+# but not ignored. Local data such as node_modules or state/ never trips it.
 set -euo pipefail
 ref="${1:-${DESIGN_GUARD_REF:-v1}}"
 src="${DESIGN_GUARD:-$HOME/Projects/Design Guard}"
@@ -16,4 +19,10 @@ if [[ ! -x "$dir/taste-guard.sh" ]]; then
   git -C "$src" archive "$sha" | tar -x -C "$dir.tmp"
   mv "$dir.tmp" "$dir"
 fi
-exec bash "$dir/taste-guard.sh" "$(git rev-parse --show-toplevel)"
+root="$(git rev-parse --show-toplevel)"
+scan="$(mktemp -d "${TMPDIR:-/tmp}/ci-taste.XXXXXX")"
+trap 'rm -rf "$scan"' EXIT
+(cd "$root" && git ls-files -z --cached --others --exclude-standard \
+  | while IFS= read -r -d '' f; do [[ -e "$f" || -L "$f" ]] && printf '%s\0' "$f"; done \
+  | tar --null -T - -cf -) | tar -x -C "$scan"
+bash "$dir/taste-guard.sh" "$scan"
