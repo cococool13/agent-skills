@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# ci-taste [ref]   (default v1, the tag the old design-guard workflow callers used)
+# Runs design-guard's taste-guard.sh at that release on the current repo.
+# The release is exported (git archive) into ~/.cache/ci/design-guard/<sha>, so
+# whatever branch the local Design Guard checkout is on never changes results.
+set -euo pipefail
+ref="${1:-${DESIGN_GUARD_REF:-v1}}"
+src="${DESIGN_GUARD:-$HOME/Projects/Design Guard}"
+if ! sha="$(git -C "$src" rev-parse -q --verify "$ref^{commit}")"; then
+  git -C "$src" fetch -q --tags origin
+  sha="$(git -C "$src" rev-parse --verify "$ref^{commit}")"
+fi
+dir="${XDG_CACHE_HOME:-$HOME/.cache}/ci/design-guard/$sha"
+if [[ ! -x "$dir/taste-guard.sh" ]]; then
+  mkdir -p "$dir.tmp"
+  git -C "$src" archive "$sha" | tar -x -C "$dir.tmp"
+  mv "$dir.tmp" "$dir"
+fi
+exec bash "$dir/taste-guard.sh" "$(git rev-parse --show-toplevel)"

@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# ship [--dry-run] [--no-merge]
+# The only way agents land work. From a clean feature branch:
+#   1. lock the repo, fetch, merge origin/<default> in (no rebase, no force push)
+#   2. ci-check the exact commit (receipt = instant if already checked)
+#   3. push, post ci/just-check, open the PR if missing, claim it
+#   4. guardrail checks (bug-then-rule) when the repo has them
+#   5. sensitive paths (CI, hooks, workflows, wrangler, auth, billing, release,
+#      entitlements): label `needs-cohen` and stop. Otherwise squash-merge,
+#      pinned to the checked sha.
+# Merging never deploys production: Workers main builds upload versions only.
+set -euo pipefail
+
+dry=0 merge=1
+for a in "$@"; do
+  case "$a" in
+    --dry-run) dry=1 ;;
+    --no-merge) merge=0 ;;
+    *) echo "usage: ship [--dry-run] [--no-merge]" >&2; exit 2 ;;
+  esac
+done
+
+here="$(cd "$(dirname "$0")" && pwd)"
+die() { echo "ship: $*" >&2; exit 1; }
+run() { if [[ "$dry" == 1 ]]; then echo "would run: $*"; else "$@"; fi; }
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+branch="$(git symbolic-ref --short -q HEAD)" || die "detached HEAD; check out a branch"
+default="$(git symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+default="${default:-main}"
+[[ "$branch" != "$default" ]] || die "on $default; ship from a feature branch"
+[[ -z "$(git status --porcelain)" ]] || die "uncommitted changes; commit first"
+
+repo="$(git remote get-url origin | sed -E 's#.*github\.com[:/]##; s#\.git$##')"
+lock="${XDG_CACHE_HOME:-$HOME/.cache}/ci/locks/${repo//\//__}"
+mkdir -p "$(dirname "$lock")"
+mkdir "$lock" 2>/dev/null || die "another ship holds $lock (remove it if no ship is running)"
+trap 'rmdir "$lock"' EXIT
+
+git fetch -q origin "$default"
+if ! git merge-base --is-ancestor "origin/$default" HEAD; then
+  if [[ "$dry" == 1 ]]; then
+    echo "would merge origin/$default into $branch (behind); checking current HEAD instead"
+  else
+    git merge -q --no-edit "origin/$default" || { git merge --abort; die "conflict merging origin/$default; resolve, commit, rerun ship"; }
+  fi
+fi
+sha="$(git rev-parse HEAD)"
+
+"$here/ci-check" "$sha"
+
+run git push -q -u origin "$branch"
+run "$here/ci-status" "$sha"
+
+pr="$(gh pr view "$branch" --json number -q .number 2>/dev/null || true)"
+if [[ -z "$pr" ]]; then
+  run gh pr create --fill --head "$branch" --base "$default"
+  [[ "$dry" == 1 ]] || pr="$(gh pr view "$branch" --json number -q .number)"
+fi
+[[ -n "$pr" && -x "$HOME/.agents/pr-claim" ]] && run "$HOME/.agents/pr-claim" claim "$repo" "$pr" "${CI_BOT:-agent}" "$sha"
+
+changed="$(git diff --name-only "origin/$default...$sha")"
+
+# Sensitive paths stop here, before the merge-only guardrails: Cohen reviews these.
+sensitive="$(grep -E '^\.github/|(^|/)wrangler\.(toml|jsonc?)$|(^|/)(auth|billing|release|licens)|\.entitlements$|(^|/)ci_scripts/|^\.ci/|^lefthook\.ya?ml$|^justfile$|^\.claude/|(^|/)STRIPE' <<<"$changed" || true)"
+if [[ -n "$sensitive" ]]; then
+  echo "ship: PR touches paths that need Cohen's review:"; sed 's/^/  /' <<<"$sensitive"
+  if [[ -n "$pr" ]]; then
+    run gh label create needs-cohen --color D93F0B --description "Agent stopped: sensitive paths" -R "$repo" 2>/dev/null || true
+    run gh pr edit "$pr" --add-label needs-cohen
+  fi
+  echo "ship: not merging. PR #${pr:-?} is labelled needs-cohen."
+  exit 0
+fi
+
+# PR-level guardrails, same scripts and arguments the old guardrails workflow used.
+if [[ -n "$pr" && -d scripts/guardrails ]]; then
+  PR_TITLE="$(gh pr view "$pr" --json title -q .title)"
+  PR_BODY="$(gh pr view "$pr" --json body -q .body)"
+  PR_LABELS="$(gh pr view "$pr" --json labels -q '[.labels[].name]|join(",")')"
+  CHANGED_FILES="$changed"
+  export PR_TITLE PR_BODY PR_LABELS CHANGED_FILES
+  if [[ -x scripts/guardrails/check-reviewed-by.sh ]]; then
+    scripts/guardrails/check-reviewed-by.sh - "$sha" \
+      || die "guardrail 7: review the diff, then add 'Reviewed-by: claude @ $sha' to PR #$pr's body and rerun ship"
+  fi
+  if [[ -x scripts/guardrails/check-bug-then-rule.sh ]]; then
+    scripts/guardrails/check-bug-then-rule.sh "$PR_TITLE" - - \
+      || die "guardrail 8 (bug, then rule) failed for PR #$pr; add the test or rule and a Rule: line"
+  fi
+fi
+
+[[ "$merge" == 1 ]] || { echo "ship: --no-merge; PR #${pr:-?} is ready at ${sha:0:9}"; exit 0; }
+run gh pr merge "${pr:-NEW}" --squash --delete-branch --match-head-commit "$sha"
+echo "ship: merged PR #${pr:-?} ($repo@${sha:0:9})"

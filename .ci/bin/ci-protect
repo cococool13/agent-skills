@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# ci-protect <owner/repo> [--apply]
+# Branch protection on the default branch: require the `ci/just-check` status
+# on the exact, up-to-date head commit, enforced for admins too. No review
+# requirement (agents merge). Dry run unless --apply. Changing protection is a
+# GitHub settings change: run --apply only with Cohen's yes.
+set -euo pipefail
+repo="${1:?usage: ci-protect owner/repo [--apply]}"
+branch="$(gh repo view "$repo" --json defaultBranchRef -q .defaultBranchRef.name)"
+body='{
+  "required_status_checks": {"strict": true, "checks": [{"context": "ci/just-check"}]},
+  "enforce_admins": true,
+  "required_pull_request_reviews": null,
+  "restrictions": null,
+  "allow_force_pushes": false,
+  "allow_deletions": false
+}'
+if [[ "${2:-}" != "--apply" ]]; then
+  echo "would PUT repos/$repo/branches/$branch/protection:"
+  echo "$body"
+  exit 0
+fi
+gh api -X PUT "repos/$repo/branches/$branch/protection" --input - <<<"$body" >/dev/null
+echo "ci-protect: $repo:$branch requires ci/just-check (strict, admins included)"
