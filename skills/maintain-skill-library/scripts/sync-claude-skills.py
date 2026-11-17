@@ -5,6 +5,8 @@
   Grok ponytail plugin skills (found by glob, so plugin hash changes self-heal).
 - Host built-in copies are reported for review. Scheduled sync never archives
   a real directory or republishes host-specific copies into another client.
+- This repo's own skills are reported when ~/.agents/skills holds a copy of one
+  (it drifts) or lacks it, and when the checkout serving them is off main.
 - ~/.local/share/node-current points at the nvm default Node, so MCP configs
   never pin a version.
 
@@ -13,6 +15,7 @@ Real directories and claude.ai downloads (skills/synced) are left alone.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 HOME = Path.home()
@@ -31,6 +34,8 @@ VIEWS = {"claude": HOME / ".claude/skills", "cursor": HOME / ".cursor/skills"}
 APP_OWNED = (str(HOME / ".local/share/ego"),)
 # Link targets this script may prune when the skill leaves the canonical set.
 MANAGED_ROOTS = (".agents/skills", "ponytail-", "Projects/Agent Skills/skills/", "Projects/Stacks/skills/")
+# The skills folder this script lives in: the Agent Skills checkout, unless a copy is running.
+OWN_SKILLS = Path(__file__).resolve().parents[2]
 NVM = HOME / ".nvm"
 NODE_LINK = HOME / ".local/share/node-current"
 
@@ -53,6 +58,27 @@ def host_copies() -> list[str]:
         if copy.is_dir() and not copy.is_symlink() and is_host_copy(copy):
             found.append(builtin.name)
     return found
+
+
+def unlinked_own_skills() -> list[str]:
+    """This repo's skills that ~/.agents/skills does not link to: a copy drifts, a missing one never loads."""
+    found = []
+    for skill in sorted(OWN_SKILLS.iterdir()) if OWN_SKILLS.is_dir() else []:
+        if not (skill / "SKILL.md").is_file():
+            continue
+        entry = CANON / skill.name
+        if entry.is_symlink() and entry.resolve() == skill.resolve():
+            continue
+        found.append(f"{skill.name} ({'copy' if entry.exists() else 'missing'})")
+    return found
+
+
+def branch_off_main() -> str:
+    """The checked-out branch when it is not main; linked skills and both launchd jobs run from it."""
+    done = subprocess.run(["git", "-C", str(OWN_SKILLS), "symbolic-ref", "--short", "-q", "HEAD"],
+                          capture_output=True, text=True)
+    branch = done.stdout.strip()
+    return "" if done.returncode != 0 or branch == "main" else branch
 
 
 def source_of(path: Path) -> Path:
@@ -135,6 +161,15 @@ def main() -> int:
     copies = host_copies()
     if copies:
         print(f"host-specific copies retained for review: {', '.join(copies)}")
+    if OWN_SKILLS.resolve() == CANON.resolve():
+        print("running from a copy in ~/.agents/skills, not the Agent Skills checkout")
+    else:
+        unlinked = unlinked_own_skills()
+        if unlinked:
+            print(f"own skills not linked from ~/.agents/skills: {', '.join(unlinked)}")
+        branch = branch_off_main()
+        if branch:
+            print(f"Agent Skills checkout is on {branch}, not main: linked skills are served from that branch")
     targets = wanted()
     for host, dest in VIEWS.items():
         view = targets if host != "claude" else {
