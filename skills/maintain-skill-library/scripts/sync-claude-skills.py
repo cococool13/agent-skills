@@ -67,18 +67,36 @@ def unlinked_own_skills() -> list[str]:
         if not (skill / "SKILL.md").is_file():
             continue
         entry = CANON / skill.name
-        if entry.is_symlink() and entry.resolve() == skill.resolve():
-            continue
-        found.append(f"{skill.name} ({'copy' if entry.exists() else 'missing'})")
+        if entry.is_symlink():
+            if entry.resolve() == skill.resolve():
+                continue
+            state = "links elsewhere"
+        else:
+            state = "copy" if entry.exists() else "missing"
+        found.append(f"{skill.name} ({state})")
     return found
+
+
+def own_git(*args: str) -> str:
+    """Output of a git query on this checkout; empty when git is absent or it is not a repository."""
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+    try:
+        done = subprocess.run(["git", "-C", str(OWN_SKILLS), *args], capture_output=True, text=True, env=env)
+    except OSError:
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
 
 
 def branch_off_main() -> str:
     """The checked-out branch when it is not main; linked skills and both launchd jobs run from it."""
-    done = subprocess.run(["git", "-C", str(OWN_SKILLS), "symbolic-ref", "--short", "-q", "HEAD"],
-                          capture_output=True, text=True)
-    branch = done.stdout.strip()
-    return "" if done.returncode != 0 or branch == "main" else branch
+    branch = own_git("symbolic-ref", "--short", "-q", "HEAD")
+    return "" if branch == "main" else branch
+
+
+def is_linked_worktree() -> bool:
+    """A git worktree of the repo: the live links point at the main checkout, so it has nothing to report."""
+    dirs = own_git("rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir").split("\n")
+    return len(dirs) == 2 and dirs[0] != dirs[1]
 
 
 def source_of(path: Path) -> Path:
@@ -163,7 +181,7 @@ def main() -> int:
         print(f"host-specific copies retained for review: {', '.join(copies)}")
     if OWN_SKILLS.resolve() == CANON.resolve():
         print("running from a copy in ~/.agents/skills, not the Agent Skills checkout")
-    else:
+    elif not is_linked_worktree():
         unlinked = unlinked_own_skills()
         if unlinked:
             print(f"own skills not linked from ~/.agents/skills: {', '.join(unlinked)}")
