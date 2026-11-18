@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- PROPOSAL (PLAN B13). Not installed. First Monday 09:00 America/New_York:
+<!-- Removed 2026-11-08. Do not copy this plist into ~/Library/LaunchAgents. First Monday 09:00 America/New_York:
      launchd cannot express "first Monday", so it fires every Monday 09:00 (local time; this Mac is
      America/New_York) and monthly.sh exits unless the day of month is 1-7. -->
 <plist version="1.0">

@@ -1,39 +1,21 @@
-# Monthly script-only check and config-drift hook (PLAN B13 proposal)
+# Config-drift hook (PLAN B13)
 
-Nothing here is installed. Run these commands only after Cohen approves B13. All paths assume the skill is installed at `~/.agents/skills/ai-stack-audit` (see `../README.md`).
+The monthly LaunchAgent `com.cococool.ai-stack-audit-monthly` was removed on 2026-11-08. Do not bootstrap it again. The config-drift hook below was not part of that job and is not installed. All paths assume the skill is installed at `~/.agents/skills/ai-stack-audit`.
 
 ## Files
 
 | File | What |
 |---|---|
-| `com.cococool.ai-stack-audit-monthly.plist` | launchd job: every Monday 09:00 local time (this Mac is America/New_York) |
-| `monthly.sh` | Exits unless day 1-7 (first Monday). Runs `scripts/run-all.sh` only, writes `~/Projects/_review/ai-stack-audit-YYYY-MM-DD/cron/`, then `SUMMARY.md` + a macOS notification |
+| `com.cococool.ai-stack-audit-monthly.plist` | Removed from `~/Library/LaunchAgents`. Do not copy it back. |
+| `monthly.sh` | Retired with the LaunchAgent. Do not schedule it. |
 | `hooks/config-drift.sh` | Warn-only Claude Code hook: `stackctl check` + background MCP hash diff when a config changes |
 | `hooks/claude-settings-hooks.json` | The hook entries to merge into `~/.claude/settings.json` |
 
 No `claude -p`, no `codex exec`, no Fable, no model tokens on any schedule. The full model-driven audit stays a manual `/ai-stack-audit` run.
 
-## Install the LaunchAgent
+## Monthly LaunchAgent
 
-```bash
-P=~/Library/LaunchAgents/com.cococool.ai-stack-audit-monthly.plist
-S=~/.agents/skills/ai-stack-audit/launchagent
-test ! -e "$P" || cp "$P" "$P.bak-audit-2026-10-19"
-cp "$S/com.cococool.ai-stack-audit-monthly.plist" "$P"
-plutil -lint "$P"
-launchctl bootstrap "gui/$(id -u)" "$P"
-launchctl print "gui/$(id -u)/com.cococool.ai-stack-audit-monthly" | grep -E 'state|run interval|last exit'
-AI_AUDIT_FORCE=1 bash "$S/monthly.sh" && cat ~/Projects/_review/ai-stack-audit-$(date +%F)/cron/SUMMARY.md
-```
-`launchctl kickstart` would run the job but `monthly.sh` exits on days after the 7th; use `AI_AUDIT_FORCE=1` for a manual test.
-
-## Uninstall / rollback
-
-```bash
-launchctl bootout "gui/$(id -u)/com.cococool.ai-stack-audit-monthly"
-mv ~/Library/LaunchAgents/com.cococool.ai-stack-audit-monthly.plist ~/.Trash/
-```
-Run outputs under `~/Projects/_review/ai-stack-audit-*/cron/` stay; delete them only with Cohen's OK.
+Removed. Do not install `com.cococool.ai-stack-audit-monthly.plist` or schedule `monthly.sh`. Past run output under `~/Projects/_review/ai-stack-audit-*/cron/` stays; delete it only with Cohen's OK.
 
 ## Summary channel
 
@@ -51,6 +33,8 @@ Cost: no `additionalContext`, so zero context tokens. `stackctl check` takes wel
 Limits: only Claude Code sessions run it; Codex and Cursor have no equivalent event wired here. `watchPaths` placement inside `hookSpecificOutput` follows the SessionStart field table; confirm with `claude --debug` after install.
 
 ### Install the hook
+
+Not installed. Do not merge it unless Cohen asks.
 
 ```bash
 SET=~/.claude/settings.json
