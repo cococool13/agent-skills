@@ -19,7 +19,8 @@ HOME = Path.home()
 CANON = HOME / ".agents/skills"
 HOST_BUILTINS = HOME / ".cursor/skills-cursor"
 PONYTAIL = HOME / ".grok/installed-plugins"
-# Unused plugin extras (2026-10-14 audit).
+# Unused plugin extras (2026-10-14 audit). Skipped in the canonical library too,
+# so client views do not link them. The canonical folders stay in place.
 PONYTAIL_SKIP = {"ponytail-audit", "ponytail-debt", "ponytail-gain", "ponytail-help"}
 # Claude-only skips (2026-10-15 audit): built-ins cover these; asc-* are linked per App Store project.
 CLAUDE_SKIP = {"code-review", "find-skills", "canvas"}
@@ -69,7 +70,7 @@ def source_of(path: Path) -> Path:
 def wanted() -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in sorted(CANON.iterdir()) if CANON.is_dir() else []:
-        if is_host_copy(path):
+        if is_host_copy(path) or path.name in PONYTAIL_SKIP:
             continue
         if not path.name.startswith(".") and (path / "SKILL.md").is_file():
             found[path.name] = source_of(path)

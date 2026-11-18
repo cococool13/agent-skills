@@ -88,8 +88,13 @@ class ContextAuditTests(unittest.TestCase):
         self.assertTrue(os.access(repo / 'scripts/check.sh', os.X_OK))
         self.assertIn('unset $(git rev-parse --local-env-vars)', (repo / 'scripts/check.sh').read_text())
         self.assertIn('run: scripts/check.sh', workflow.read_text())
+        # Pre-push runs `just check` (through the vendored CI kit), and `check` runs the gate.
         pre_push = (repo / 'lefthook.yml').read_text().split('pre-push:')[1]
-        self.assertIn('run: scripts/check.sh', pre_push)
+        self.assertIn('run: .ci/bin/ci-pre-push', pre_push)
+        justfile = (repo / 'justfile').read_text()
+        check = re.search(r'^check:\n((?:[ \t]+.*\n)+)', justfile, re.M).group(1)
+        self.assertRegex(check, r'\bgate\b')
+        self.assertRegex(justfile, r'(?m)^gate:\n[ \t]+scripts/check\.sh$')
 
     def test_repo_upgrade_selftest_leaves_an_inherited_git_dir_alone(self):
         # Git exports GIT_DIR into hooks; the fixture's init and commit once hit the pushing repo.
