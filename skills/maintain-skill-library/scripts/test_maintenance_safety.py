@@ -215,6 +215,37 @@ class SkillSyncTests(unittest.TestCase):
             self.assertFalse((sync.VIEWS['claude'] / 'create-hook').exists())
             self.assertEqual(sync.host_copies(), ['create-hook'])
 
+    def test_own_skills_report_copies_and_missing_links(self):
+        sync = load('sync_own', 'sync-claude-skills.py')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sync.CANON = root / 'canon'
+            sync.OWN_SKILLS = root / 'repo/skills'
+            sync.CANON.mkdir()
+            for name in ('linked', 'copied', 'absent', 'elsewhere'):
+                (sync.OWN_SKILLS / name).mkdir(parents=True)
+                (sync.OWN_SKILLS / name / 'SKILL.md').write_text(name)
+            (sync.CANON / 'linked').symlink_to(sync.OWN_SKILLS / 'linked')
+            (sync.CANON / 'copied').mkdir()
+            (sync.CANON / 'copied/SKILL.md').write_text('older text')
+            (sync.CANON / 'elsewhere').symlink_to(root / 'another-checkout/elsewhere')
+            self.assertEqual(sync.unlinked_own_skills(),
+                             ['absent (missing)', 'copied (copy)', 'elsewhere (links elsewhere)'])
+
+    def test_checkout_off_main_is_reported(self):
+        import subprocess
+        sync = load('sync_branch', 'sync-claude-skills.py')
+        with tempfile.TemporaryDirectory() as temp:
+            sync.OWN_SKILLS = Path(temp) / 'skills'
+            sync.OWN_SKILLS.mkdir()
+            subprocess.run(['git', 'init', '-q', '-b', 'main', temp], check=True)
+            self.assertEqual(sync.branch_off_main(), '')
+            subprocess.run(['git', '-C', temp, 'checkout', '-q', '-b', 'fix/thing'], check=True)
+            self.assertEqual(sync.branch_off_main(), 'fix/thing')
+            self.assertFalse(sync.is_linked_worktree())
+            with patch.dict('os.environ', {'PATH': ''}):
+                self.assertEqual(sync.branch_off_main(), '')
+
     def test_custom_shared_skill_can_override_a_builtin_name(self):
         sync = load('sync_custom', 'sync-claude-skills.py')
         with tempfile.TemporaryDirectory() as temp:
