@@ -46,7 +46,8 @@ EXTRA_DENY = [
     "security find-internet-password -s example",
     "security dump-keychain",
     "git push -f origin main",
-    "git push --force-with-lease origin feat",
+    "git push --force-with-lease origin main",
+    "git push --force-with-lease origin HEAD:master",
     "git push origin +main",
     "rm -rf /",
     "rm -rf $HOME",
@@ -58,7 +59,120 @@ EXTRA_DENY = [
     "git status; env",
     "stripe charges create --live",
 ]
-EXTRA_ASK = ["stripe customers list", "npm publish", "gh release create v1", "xcrun altool --upload-app -f a.ipa", "gh pr merge 3", "git reset --hard"]
+EXTRA_ASK = ["stripe customers list", "npm publish", "gh release create v1", "xcrun altool --upload-app -f a.ipa", "gh pr merge 3", "git reset --hard",
+             # A lease on a feature branch is destructive git Cohen can approve (2026-11-10); main stays denied.
+             "git push --force-with-lease origin feat"]
+
+# 2026-11-10 false-positive audit: routine commands the guard used to stop, each with the
+# neighbouring command that must stay gated.
+FP_ALLOW = [
+    "cat .claude/settings.json | jq .",
+    "cat .claude/settings.json 2>/dev/null",
+    "git add .claude/settings.json && git commit -m x",
+    "rg -i 'drop table' src | head",
+    "git log --grep 'drop table' | head",
+    "which vercel",
+    "npm uninstall vercel",
+    "mkdir vercel",
+    "git commit -m 'remove vercel config'",
+    "rg -l vercel src",
+    "npm i @vercel/analytics",
+    "git clone https://github.com/vercel/next.js /tmp/nextjs",
+    "ls node_modules/@netlify",
+    "git commit -m 'drop table of contents'",
+    ".build/release/mytool --help",
+    "./build/Release/App.app/Contents/MacOS/App",
+    "npm run release-notes",
+    "bash checks/check-dmg-release.sh",
+    "node scripts/deploy.test.js",
+    "pnpm test:deploy",
+    "wrangler deploy --dry-run",
+    "cat .claude/settings.json",
+    "git add .claude/settings.json",
+    "git diff -- .claude/settings.json",
+    "ssh-keygen -lf ~/.ssh/id_ed25519.pub",
+    "cat test-pubkey.pem",
+    "cat keys/com.example.public-key.pem",
+    "cat appstoreconnect.env.example",
+    "touch .env.local",
+    "cp .env.example .env",
+    "grep -rn --include='*.ts' TODO .",
+    "rg -g '*.ts' TODO",
+]
+FP_ASK = [
+    "vercel deploy",
+    "npx netlify deploy",
+    "psql -c 'drop table users'",
+    "./deploy.sh",
+    "npm run deploy",
+    "node scripts/deploy.js",
+    "wrangler deploy --env production",
+    # Second review (2026-11-10): a wrapper, a pipe or a joined script name must not hide the action.
+    "yarn vercel deploy --prod",
+    "pnpm vercel --prod",
+    "npm run vercel",
+    "doppler run -- vercel deploy",
+    "echo 'drop table users' | psql",
+    "sqlite3 app.db <<< 'drop table users'",
+    "./deploy-and-verify.sh",
+    "npm run deploy:verify",
+    "./scripts/check-then-publish.sh",
+    # Third review: quoting must not hide SQL, and a safe word mid-name does not make a script safe.
+    'psql -c "DROP ""TABLE users"',
+    "wrangler d1 execute db --command 'dr''op table x'",
+    "npx netlify-cli deploy --prod",
+    "find . -maxdepth 0 -exec vercel deploy --prod ';'",
+    "yarn vc --prod",
+    "doppler run -- vc --prod",
+    "./deploy-plan-apply.sh",
+    "./release-notes-publish.sh",
+]
+FP_DENY = [
+    "cat ~/.claude/settings.json",
+    "cd ~ && cat .claude/settings.json",
+    "cat ../../.claude/settings.json",
+    "cat fleet-key.pem",
+    "cat ~/.ssh/id_ed25519",
+    "cp .env /tmp/copy.txt",
+    # Second review (2026-11-10): a relative settings path is trusted only in one plain command.
+    'echo "$(cd ../.. && cat .claude/settings.json)"',
+    "tar cfC - ../.. .claude/settings.json",
+    "tar cf - --cd ../.. .claude/settings.json",
+    "popd; cat .claude/settings.json",
+    "git -C ~ diff .claude/settings.json",
+    "node -e \"console.log(require('fs').readFileSync(require('path').resolve('..','..','.claude/settings.json'),'utf8'))\"",
+    # A lease push that names no branch, or one that may be main, cannot be approved.
+    "git push --force-with-lease",
+    "git push --force-with-lease origin HEAD",
+    "git push --force-with-lease --all",
+    "git push --force-with-lease origin feat:MAIN",
+    "git push --force-with-lease origin 'refs/heads/*:refs/heads/*'",
+    # Third review: a flag or URL glued to the user-level path is not a relative project path.
+    "git commit --allow-empty -F" + HOME + "/.claude/settings.json",
+    "git tag -F" + HOME + "/.claude/settings.json v1",
+    "open file://" + HOME + "/.claude/settings.json",
+    "cat .claude/settings.json | (cd ~; cat .claude/settings.json)",
+    "git config alias.t '!git -C " + HOME + " diff --no-index /dev/null' && git t .claude/settings.json",
+    # Red-team pass on the audit's own exemptions (2026-11-10): each of these slipped through a first draft.
+    "cat id_rsa{.pub,}",
+    "cat .env{.example,}",
+    "cat ~root/.claude/settings.json",
+    "cat ~/{,}.claude/settings.json",
+    "cat /System/Volumes/Data" + HOME + "/.claude/settings.json",
+    "tar cf - -C ~ .claude/settings.json",
+    "env -C ~ cat .claude/settings.json",
+    "git -C ~ diff --no-index /dev/null .claude/settings.json",
+    "chdir ~ && cat .claude/settings.json",
+    "eval 'cd ~'; cat .claude/settings.json",
+    "echo ~ | xargs -I% cat %/.claude/settings.json",
+    "find ~ -path '*/.claude/settings.json' -exec cat {} +",
+    "python3 -c \"import os;print(open(os.path.expanduser('~')+'/.claude/settings.json').read())\"",
+    "cat my-pubkey-private.pem",
+    "cat republic-key.pem",
+    "cat cacert-server-private.pem",
+    "mv .env .env.local.example",
+    "cp -p .env .env.copy.example",
+]
 EXTRA_ALLOW = [
     "rm -rf node_modules",
     "rm -rf ~/Projects/Example/dist",
@@ -363,6 +477,11 @@ class GuardContract(unittest.TestCase):
 
     def test_allow(self):
         self.matrix(ALLOW + EXTRA_ALLOW, "allow")
+
+    def test_false_positive_audit(self):
+        self.matrix(FP_ALLOW, "allow")
+        self.matrix(FP_ASK, "ask")
+        self.matrix(FP_DENY, "deny")
 
     def test_red_team_deny(self):
         self.matrix(RED_DENY, "deny")

@@ -39,7 +39,6 @@ New sites are Workers with static assets. Leave the Pages projects below as Page
 | Pivot | Pages `pivot` | `pivot-5sx.pages.dev` |
 | Quire | Pages `quire` | `quire-ebz.pages.dev` |
 | Cesura (Baton/site) | Pages `cesura` | `cesura.pages.dev` |
-| Prompt Gallery | Pages `prompt-to-app-gallery` | `prompt-to-app-gallery.pages.dev` |
 | Azukari | Worker `they-hold` | `azukari.app` |
 | Spiral Ship | Worker `spiralship-site` | `spiralship.com` |
 | Berth | Worker `berth` | `berth.cohencool.com` |
@@ -55,6 +54,8 @@ Worker `tweakeazy-site`. The portfolio links the Worker.
 `stacks-web`, `stacks-auth`, `stacks-mcp`, and `stacks-site` are the Stacks app.
 The private `stacks` Worker is retired. Access also covers
 `dashboard.cohencool.workers.dev`.
+
+Retired projects stay undeployed: Unboxed, ShipLog, CreditDrop, Signature, Hotseat, Prompt-to-App Gallery (`prompt-to-app-gallery`), and AgentShelf. Do not recreate them.
 
 ## Pick the mode from the repo
 

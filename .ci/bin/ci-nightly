@@ -3,6 +3,9 @@
 # For each repo, on origin/<default> in ci-check's cached worktree:
 #   just check, then every `*-full` recipe the repo defines.
 # Writes ~/Projects/_ops/reports/ci/nightly/<date>.md. Never pushes, merges or deploys.
+# PR checks skip what a diff cannot reach, so this run is what proves each main commit in
+# full. A repo it could not check (fetch failed, disk nearly full) is reported and counted,
+# never left looking like a pass. CI_NIGHTLY_MIN_FREE_GB (default 5) is the disk floor.
 set -uo pipefail
 out_dir="${CI_NIGHTLY_DIR:-$HOME/Projects/_ops/reports/ci/nightly}"
 mkdir -p "$out_dir"
@@ -21,10 +24,21 @@ fi
   echo "| Repo | Commit | Result | Time |"
   echo "|---|---|---|---|"
 } >"$report"
-fails=0
+fails=0 passed=0 unchecked=0
+min_free_gb="${CI_NIGHTLY_MIN_FREE_GB:-5}"
+mkdir -p "$cache"
 for repo in "${repos[@]}"; do
   git -C "$repo" remote get-url origin >/dev/null 2>&1 || continue
-  git -C "$repo" fetch -q origin 2>/dev/null || { echo "| $(basename "$repo") | - | fetch failed | - |" >>"$report"; continue; }
+  # A full disk made every later fetch and receipt fail on 2026-11-17: stop checking, say why.
+  free_gb=$(( $(df -Pk "$cache" | awk 'NR==2 {print $4}') / 1048576 ))
+  if (( free_gb < min_free_gb )); then
+    echo "| $(basename "$repo") | - | not checked: ${free_gb} GB free, needs ${min_free_gb} | - |" >>"$report"
+    unchecked=$((unchecked + 1)); continue
+  fi
+  if ! err="$(git -C "$repo" fetch -q origin 2>&1)" && { sleep "${CI_NIGHTLY_RETRY_SLEEP:-20}"; ! err="$(git -C "$repo" fetch -q origin 2>&1)"; }; then
+    echo "| $(basename "$repo") | - | not checked: fetch failed (\`$(tail -n 1 <<<"$err" | tr -d '|\`' | cut -c1-120)\`) | - |" >>"$report"
+    unchecked=$((unchecked + 1)); continue
+  fi
   default="$(git -C "$repo" symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
   sha="$(git -C "$repo" rev-parse -q --verify "$default^{commit}")" || continue
   git -C "$repo" cat-file -e "$sha:justfile" 2>/dev/null || continue
@@ -34,7 +48,7 @@ for repo in "${repos[@]}"; do
   {
     (cd "$repo" && CI_FORCE=1 "$kit/bin/ci-check" "$sha") || result="check FAILED"
     # ci-check ran in place only when the clone sits clean on $sha; else in its cached worktree.
-    wt="$cache/worktrees/$slug"
+    wt="${CI_WORKTREES:-${XDG_STATE_HOME:-$HOME/.local/state}/ci/worktrees}/$slug"
     [[ "$(git -C "$repo" rev-parse HEAD)" == "$sha" && -z "$(git -C "$repo" status --porcelain)" ]] && wt="$repo"
     if [[ -d "$wt" ]]; then
       # Every `*-full` recipe: the slow, input-gated steps `check` skips (gitleaks-full,
@@ -44,10 +58,10 @@ for repo in "${repos[@]}"; do
       done
     fi
   } >"$log" 2>&1
-  [[ "$result" == pass ]] || fails=$((fails + 1))
+  if [[ "$result" == pass ]]; then passed=$((passed + 1)); else fails=$((fails + 1)); fi
   echo "| $(basename "$repo") | \`${sha:0:9}\` | $result | $((SECONDS - s))s |" >>"$report"
 done
 echo >>"$report"
-echo "$fails failing. Logs: \`$out_dir/logs/\`" >>"$report"
-echo "ci-nightly: $report ($fails failing)"
-exit $(( fails > 0 ))
+echo "$passed passed, $fails failing, $unchecked not checked. Logs: \`$out_dir/logs/\`" >>"$report"
+echo "ci-nightly: $report ($passed passed, $fails failing, $unchecked not checked)"
+exit $(( fails + unchecked > 0 ))
