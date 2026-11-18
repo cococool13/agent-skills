@@ -21,7 +21,9 @@ Weekly (Monday 10:00): LaunchAgent `com.cococool.skills-update` runs `scripts/up
 from `~/Projects/Agent Skills/skills/maintain-skill-library/` with the pinned CLI in
 `~/.local/share/skills` (`skills@1.7.5`; `npm ci` from `skills-cli/`): diff report in
 `~/Library/Logs/skills-update/<date>.md` → update of lock entries with a `ref` (no `-y`) →
-local overlays → conflict-checked instruction edits → report scan-path duplicates.
+conflict-checked instruction edits → local overlays → report scan-path duplicates.
+Instruction edits go first: `post-update-patches.py` stops while `emil-design-eng` still
+contains `## Initial Response`, and the override removes that section.
 `update-skills.sh --dry-run` writes the report and runs the checks only. To take an upstream
 change, review it, then move the entry's `ref` (`scripts/skill-refs.py report` / `pin`).
 The source checkout and `~/.agents/skill-overlays/instruction-edits.json` preserve
@@ -42,8 +44,9 @@ Use `~/.agents/.skill-lock.json` to distinguish source-managed installs from
 original personal skills. `~/.claude/skills` is a symlink view of this library, refreshed by `sync-claude-skills.py`.
 
 `~/.agents/skills` is the canonical store for shared personal and source-managed
-skills. Cursor discovers that folder natively. Do not install duplicate real copies into client skill folders. Cursor sync
-symlinks into the canonical library are intentional aliases, not second copies. Claude Code uses the same kind of alias under `~/.claude/skills`. Cursor built-ins
+skills. Do not install duplicate real copies into client skill folders. `~/.cursor/skills`
+and `~/.claude/skills` are symlink views. This Cursor session indexes both, so a skill
+linked only into the Claude view still reaches Cursor. Cursor built-ins
 (`~/.cursor/skills-cursor`) and live plugin caches stay untouched. Scheduled sync
 reports real host-specific copies instead of archiving them or exposing them to
 other clients. A deliberately host-aware personal skill may share a built-in name.
@@ -51,7 +54,7 @@ other clients. A deliberately host-aware personal skill may share a built-in nam
 After `skills update`, run
 `scripts/prune-cursor-scan-paths.py` to report extra scan-path copies. Its default
 is read-only; apply retirements only with explicit authorization. Preserve app-owned links. Weekly LaunchAgent `com.cococool.skills-update` runs
-`scripts/update-skills.sh` (report, pinned update, then scan). Original personal skills have
+`scripts/update-skills.sh` (report, pinned update, instruction edits, overlays, audit, scan). Original personal skills have
 no upstream and do not auto-update.
 
 The scan includes broken Grok links while preserving working Grok aliases. Shared

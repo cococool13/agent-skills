@@ -1,6 +1,6 @@
 #!/bin/sh
-# The skills-ci gate: lefthook pre-push and .github/workflows/skills-ci.yml both run
-# this, so add checks here and not in either caller. test_guard.py takes about a
+# The skills-ci gate: `just check` (which lefthook pre-push runs) and
+# .github/workflows/skills-ci.yml both run this, so add checks here and not in a caller. test_guard.py takes about a
 # minute and needs HOME outside temp roots (the guard treats temp paths as safe).
 set -eu
 cd "$(git rev-parse --show-toplevel)"

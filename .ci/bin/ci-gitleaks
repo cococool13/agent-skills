@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ci-gitleaks [--full]
+# Default: scans the commits this branch adds over origin/<default> (what
+# gitleaks-action scanned on a pull request). --full: the whole history
+# (nightly; a big repo takes minutes). Uses the repo's .gitleaks.toml and
+# .gitleaksignore. Output is redacted.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+if [[ "${1:-}" == "--full" ]]; then
+  exec gitleaks git --no-banner --redact .
+fi
+default="$(git symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
+if ! base="$(git merge-base "$default" HEAD 2>/dev/null)"; then
+  echo "ci-gitleaks: no $default to compare with; scanning full history"
+  exec gitleaks git --no-banner --redact .
+fi
+if [[ "$base" == "$(git rev-parse HEAD)" ]]; then
+  echo "ci-gitleaks: no commits beyond $default"
+  exit 0
+fi
+exec gitleaks git --no-banner --redact --log-opts="$base..HEAD" .

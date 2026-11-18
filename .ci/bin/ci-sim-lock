@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# ci-sim-lock <command...>
+# Runs an xcodebuild/simulator command under a lock so parallel `just check`s
+# (several repos, several agents) do not collide:
+# - iOS Simulator and anything not marked macOS: one machine-wide lock.
+# - `-destination platform=macOS` commands: one lock per repo (worktrees of the
+#   same repo share it) plus at most CI_MAC_SLOTS (default 3) at once, so
+#   different Mac apps build and test in parallel instead of queueing.
+# Waits for the holder; takes over a lock whose process died.
+set -euo pipefail
+locks="${XDG_CACHE_HOME:-$HOME/.cache}/ci/locks"
+mkdir -p "$locks"
+held=()
+trap 'for l in ${held[@]+"${held[@]}"}; do rm -f "$l/pid" "$l/what"; rmdir "$l" 2>/dev/null || true; done' EXIT
+
+try() { # try <lockdir>: take it if free or stale; 0 on success
+  local l="$1" holder
+  if mkdir "$l" 2>/dev/null; then
+    echo $$ >"$l/pid"; echo "$(basename "$PWD"): $CMD" >"$l/what"; held+=("$l"); return 0
+  fi
+  holder="$(cat "$l/pid" 2>/dev/null || true)"
+  if [[ -n "$holder" ]] && ! kill -0 "$holder" 2>/dev/null; then
+    rm -f "$l/pid" "$l/what"; rmdir "$l" 2>/dev/null || true
+  fi
+  return 1
+}
+wait_for() { # wait_for <lockdir...>: take any one of them
+  local waited=0 l
+  while :; do
+    for l in "$@"; do try "$l" && return 0; done
+    (( waited % 30 == 0 )) && echo "ci-sim-lock: waiting ($(cat "$1/what" 2>/dev/null || echo '?'))" >&2
+    sleep 1; waited=$((waited + 1))
+  done
+}
+
+CMD="$*"
+if [[ " $CMD " =~ platform=macOS && " $CMD " != *Simulator* ]]; then
+  slug="$(git remote get-url origin 2>/dev/null | sed -E 's#.*github\.com[:/]##; s#\.git$##; s#/#__#' || true)"
+  wait_for "$locks/mac-${slug:-$(basename "$PWD")}"
+  slots=()
+  for i in $(seq "${CI_MAC_SLOTS:-3}"); do slots+=("$locks/mac-slot-$i"); done
+  wait_for "${slots[@]}"
+else
+  wait_for "$locks/simulator"
+fi
+"$@"
