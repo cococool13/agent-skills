@@ -1,0 +1,1 @@
+Use when building a new web animation or transition from scratch. To critique existing motion use review-animations; for a codebase audit use improve-animations.

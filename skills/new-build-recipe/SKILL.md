@@ -18,7 +18,7 @@ Skip this phase when the build has no existing product to learn from.
 
 ## 2. Pick design references
 
-Read `~/.agents/design-refs/DESIGN-PREFS.md`, section "Tools, skills, and when", and follow it. The floor and the chosen mood win over a skill default.
+Read `~/.agents/design-refs/DESIGN-PREFS.md`, section "Tools, skills, and when", and use it as a map. Cohen's dislikes and the chosen mood win over a skill default.
 
 - Pick the mood, then call Stacks `suggest_for_task` once, `get_board_for_project` when a board exists, then `suggest_pack_for_task` and `search_design`.
 - Use `refero-design` for real app screens and flows. Use Inspo when that MCP is connected.

@@ -34,7 +34,9 @@ run() {
 
   update_status=0
   pinned=()
-  while IFS= read -r name; do pinned+=("$name"); done < <(jq -r '.skills | to_entries[] | select(.value.ref != null) | .key' "$LOCK")
+  # react-view-transitions: folder name and frontmatter name differ, so `skills update`
+  # always fails on it ("No matching skills found"). It is updated by hand.
+  while IFS= read -r name; do pinned+=("$name"); done < <(jq -r '.skills | to_entries[] | select(.value.ref != null and .key != "react-view-transitions") | .key' "$LOCK")
   unpinned=$(jq -r '[.skills | to_entries[] | select(.value.ref == null) | .key] | join(", ")' "$LOCK")
   echo "pinned: ${#pinned[@]}; waiting for manual review: ${unpinned:-none}"
 

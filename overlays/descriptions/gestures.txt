@@ -1,0 +1,1 @@
+Use when building or fixing drag, swipe, sheet, snap-point, pull-to-refresh or hold-to-confirm interactions on the web.

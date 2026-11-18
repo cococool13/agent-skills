@@ -1,0 +1,1 @@
+Use when an app feels slow or over-animated and motion should be removed or toned down. Only subtracts.

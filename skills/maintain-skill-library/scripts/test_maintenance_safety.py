@@ -288,4 +288,16 @@ class SkillSyncTests(unittest.TestCase):
                 self.assertEqual((view / 'ponytail').resolve(), kept.resolve())
 
 
+
+
+class UpdateScriptOrderTests(unittest.TestCase):
+    """2026-11-16: the weekly job died because patches ran before the overrides they depend on."""
+
+    def test_overrides_run_before_patches(self):
+        lines = [l.strip() for l in (BASE / 'update-skills.sh').read_text().splitlines()
+                 if l.strip().startswith('python3') and '--check' not in l]
+        order = [l.split('/')[-1].rstrip('"') for l in lines]
+        self.assertLess(order.index('apply-instruction-overrides.py'), order.index('post-update-patches.py'))
+
+
 if __name__ == '__main__': unittest.main()

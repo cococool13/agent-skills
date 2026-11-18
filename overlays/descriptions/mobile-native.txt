@@ -1,0 +1,1 @@
+Use when a web app or PWA should feel native on a phone: sticky hover, tap flash, 100vh, input zoom, notch, pull-to-refresh, touch.
