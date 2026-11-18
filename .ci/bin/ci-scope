@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# ci-scope --not GLOB... -- cmd...    skip cmd when every changed file matches a --not glob
+# ci-scope --only GLOB... -- cmd...   skip cmd when no changed file matches an --only glob
+# For a slow stage that one part of a repo owns: xcodebuild in a repo that also has a
+# Worker and a site. A Worker-only or docs-only PR then never starts the build.
+#
+# It skips only on PR commits (ci-check sets CI_BASE to the merge-base). A commit on the
+# default branch, the nightly run and a bare `just <recipe>` always run cmd, and so does
+# CI_SCOPE=full. A change to justfile, .ci/, lefthook.yml or .github/ always runs cmd.
+#
+# Prefer --not: it names what the stage does not read, so a path nobody listed runs it.
+# --only skips everything unlisted; use it for a stage with a short, closed input list.
+# In a glob, * also matches "/": 'worker/*' is everything under worker/, '*.md' is any
+# Markdown file. Paths are relative to the repo root.
+set -euo pipefail
+
+mode="" globs=()
+while [[ $# -gt 0 && "$1" != "--" ]]; do
+  case "$1" in
+    --not|--only)
+      [[ -z "$mode" || "$mode" == "$1" ]] || { echo "ci-scope: use --not or --only, not both" >&2; exit 2; }
+      mode="$1"; globs+=("$2"); shift 2 ;;
+    *) echo "usage: ci-scope (--not GLOB... | --only GLOB...) -- cmd..." >&2; exit 2 ;;
+  esac
+done
+[[ "${1:-}" == "--" && $# -gt 1 && -n "$mode" ]] || { echo "usage: ci-scope (--not GLOB... | --only GLOB...) -- cmd..." >&2; exit 2; }
+shift
+
+run() { echo "ci-scope: run ($1)"; exec "${@:2}"; }
+
+[[ "${CI_SCOPE:-}" == full ]] && run "CI_SCOPE=full" "$@"
+[[ -n "${CI_BASE:-}" ]] || run "not a PR commit" "$@"
+
+root="$(git rev-parse --show-toplevel)"
+# --no-renames lists a moved file under both names; deletions are listed too.
+changed="$(git -C "$root" diff --name-only --no-renames "$CI_BASE" && git -C "$root" ls-files --others --exclude-standard)" \
+  || run "no diff against ${CI_BASE:0:9}" "$@"
+[[ -n "$changed" ]] || run "empty diff" "$@"
+
+# shellcheck disable=SC2053  # the right side is the glob
+matches() { local g; for g in "${globs[@]}"; do [[ "$1" == $g ]] && return 0; done; return 1; }
+
+n=0
+while IFS= read -r f; do
+  n=$((n + 1))
+  case "$f" in
+    justfile|.ci/*|lefthook.yml|.github/*) run "$f changed" "$@" ;;
+  esac
+  if [[ "$mode" == "--not" ]]; then
+    matches "$f" || run "$f changed" "$@"
+  else
+    matches "$f" && run "$f changed" "$@"
+  fi
+done <<<"$changed"
+
+echo "ci-scope: skip ($n changed file(s) since ${CI_BASE:0:9}, none this stage reads; CI_SCOPE=full runs it): $*"
