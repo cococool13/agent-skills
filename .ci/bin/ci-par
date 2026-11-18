@@ -50,7 +50,9 @@ fail=0
 for r in "$@"; do
   read -r rc secs <"$logs/$r.rc"
   if [[ "$rc" == 0 ]]; then
-    table+="$(printf 'ok    %-22s %6ss' "$r" "$secs")"$'\n'
+    # ci-scope skipped a step the diff cannot reach: say so, a skip is not a pass.
+    note=""; grep -q '^ci-scope: skip' "$logs/$r.log" && note="  (skipped: diff out of scope)"
+    table+="$(printf 'ok    %-22s %6ss%s' "$r" "$secs" "$note")"$'\n'
   else
     fail=1
     table+="$(printf 'FAIL  %-22s %6ss' "$r" "$secs")"$'\n'

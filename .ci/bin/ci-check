@@ -2,8 +2,10 @@
 # ci-check [rev]   (default HEAD)
 # Runs `just check` for exactly that commit and records a receipt on pass.
 # - Working tree clean and HEAD is that commit: runs in place (warm caches).
-# - Otherwise: runs in a reusable detached worktree under ~/.cache/ci/worktrees,
-#   so uncommitted edits never leak into the result. Ignored files there
+# - Otherwise: runs in a reusable detached worktree under ~/.local/state/ci/worktrees
+#   (CI_WORKTREES), so uncommitted edits never leak into the result. Not under ~/.cache:
+#   Biome 2.6 skips its nested-config scan for any path with a `.cache` folder in it, so
+#   a repo with a second biome.json linted with the wrong rules there. Ignored files there
 #   (node_modules, DerivedData) persist between runs; `just setup` runs first
 #   when the repo has that recipe.
 # A commit that already has a receipt is not checked again (CI_FORCE=1 rechecks).
@@ -12,6 +14,7 @@ set -euo pipefail
 root="$(git rev-parse --show-toplevel)"
 sha="$(git -C "$root" rev-parse "${1:-HEAD}^{commit}")"
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/ci"
+worktrees="${CI_WORKTREES:-${XDG_STATE_HOME:-$HOME/.local/state}/ci/worktrees}"
 slug="$(git -C "$root" remote get-url origin 2>/dev/null | sed -E 's#.*github\.com[:/]##; s#\.git$##; s#/#__#')"
 slug="${slug:-$(basename "$root")}"
 receipt="$cache/receipts/$slug/$sha"
@@ -33,10 +36,16 @@ fi
 
 dir="$root"
 if [[ "$(git -C "$root" rev-parse HEAD)" != "$sha" || -n "$(git -C "$root" status --porcelain)" ]]; then
-  dir="$cache/worktrees/$slug"
+  dir="$worktrees/$slug"
+  old="$cache/worktrees/$slug"   # where they lived before; move it, keep its warm caches
+  if [[ ! -e "$dir" && -e "$old/.git" ]]; then
+    mkdir -p "$worktrees"
+    git -C "$root" worktree move "$old" "$dir"
+  fi
   if [[ ! -d "$dir/.git" && ! -f "$dir/.git" ]]; then
     mkdir -p "$(dirname "$dir")"
-    git -C "$root" worktree add --detach -q "$dir" "$sha"
+    # -f: the folder can be gone while git still lists it (cache cleared by hand).
+    git -C "$root" worktree add --detach -f -q "$dir" "$sha"
   else
     git -C "$dir" checkout -q --detach -f "$sha"
     git -C "$dir" clean -fdq   # untracked only; ignored caches stay
