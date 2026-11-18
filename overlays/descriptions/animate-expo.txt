@@ -1,0 +1,1 @@
+Use when animating React Native or Expo: Reanimated, gestures, sheets, screen transitions, haptics, or motion that stutters on device.

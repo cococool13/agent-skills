@@ -1,0 +1,1 @@
+Use when a web animation drops frames or stutters, or when choosing properties, CSS vs JS, will-change or GPU layers on performance grounds.

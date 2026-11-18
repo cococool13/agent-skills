@@ -1,0 +1,1 @@
+Use when several elements animate together: staggers, hero entrances, view swaps, multi-step flows, or group motion that feels mechanical.

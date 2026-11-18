@@ -1,0 +1,1 @@
+Use when asked what could be animated or how to make a UI feel more alive. Read-only: proposes motion with exact values.

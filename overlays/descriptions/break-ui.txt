@@ -1,0 +1,1 @@
+Use when asked to stress-test or break a component or screen with worst-case data and report what failed with fixes.

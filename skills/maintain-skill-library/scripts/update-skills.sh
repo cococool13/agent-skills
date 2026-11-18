@@ -31,7 +31,9 @@ run() {
 
   update_status=0
   pinned=()
-  while IFS= read -r name; do pinned+=("$name"); done < <(jq -r '.skills | to_entries[] | select(.value.ref != null) | .key' "$LOCK")
+  # react-view-transitions: folder name and frontmatter name differ, so `skills update`
+  # always fails on it ("No matching skills found"). It is updated by hand.
+  while IFS= read -r name; do pinned+=("$name"); done < <(jq -r '.skills | to_entries[] | select(.value.ref != null and .key != "react-view-transitions") | .key' "$LOCK")
   unpinned=$(jq -r '[.skills | to_entries[] | select(.value.ref == null) | .key] | join(", ")' "$LOCK")
   echo "pinned: ${#pinned[@]}; waiting for manual review: ${unpinned:-none}"
 
@@ -46,8 +48,9 @@ run() {
     "$SKILLS" update -g "${pinned[@]}" </dev/null || update_status=$?
   fi
   python3 "${MAINTENANCE_DIR}/sync-claude-skills.py"
-  python3 "${MAINTENANCE_DIR}/post-update-patches.py"
+  # Overrides first: post-update-patches.py stops while a section an override removes is still there.
   python3 "${MAINTENANCE_DIR}/apply-instruction-overrides.py"
+  python3 "${MAINTENANCE_DIR}/post-update-patches.py"
   python3 "${MAINTENANCE_DIR}/audit-context.py"
   python3 "${MAINTENANCE_DIR}/prune-cursor-scan-paths.py"
   if [ "$update_status" -ne 0 ]; then

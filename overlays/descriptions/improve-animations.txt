@@ -1,0 +1,1 @@
+Use when asked to audit or improve a codebase's animations and produce a prioritized plan. Read-only on source.
