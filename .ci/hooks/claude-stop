@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Claude Code Stop hook. When the working tree has changes, runs
+# `just check-fast`. On failure it blocks the stop (exit 2) with the first
+# error and the rerun command, so the agent fixes it before claiming done.
+# After 3 failed tries in one session it lets the stop through with an
+# UNVERIFIED notice instead of looping.
+set -uo pipefail
+input="$(cat)"
+sid="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("session_id","nosession"))' <<<"$input" 2>/dev/null || echo nosession)"
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$root" || exit 0
+[[ -n "$(git status --porcelain)" ]] || exit 0
+[[ -f justfile || -f Justfile || -f .justfile ]] || exit 0
+
+state="${XDG_CACHE_HOME:-$HOME/.cache}/ci/stop/$sid"
+mkdir -p "$(dirname "$state")"
+# A justfile that no longer parses is a failure, not "no checks".
+if summary="$(just --summary 2>&1)"; then
+  [[ " $summary " == *" check-fast "* ]] || exit 0
+  out="$(just check-fast 2>&1)" && { rm -f "$state"; exit 0; }
+else
+  out="$summary"
+fi
+
+n=$(( $(cat "$state" 2>/dev/null || echo 0) + 1 ))
+if (( n >= 3 )); then
+  rm -f "$state"
+  python3 -c 'import json; print(json.dumps({"systemMessage": "UNVERIFIED: just check-fast still fails after 3 tries. Say so plainly; do not claim done."}))'
+  exit 0
+fi
+echo "$n" >"$state"
+first="$(grep -m1 -E '[A-Za-z0-9_./-]+\.[A-Za-z]{1,6}:[0-9]+' <<<"$out" || grep -m1 -iE 'error|fail' <<<"$out" || tail -n1 <<<"$out")"
+{
+  echo "just check-fast failed (try $n of 3). First error: $first"
+  echo "Fix it, then rerun: just check-fast"
+  echo "--- last 30 lines ---"
+  tail -n 30 <<<"$out"
+} >&2
+exit 2

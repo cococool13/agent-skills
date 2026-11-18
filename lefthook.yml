@@ -7,8 +7,11 @@ pre-commit:
     gitleaks:
       run: gitleaks protect --staged --redact --no-banner
 
-# Pre-push: the skills-ci gate. CI runs the same script.
+# Pre-push runs `just check` on each pushed commit (skipped when that commit
+# already passed). Same command as agents and ship; it covers scripts/check.sh,
+# which the public skills-ci workflow still runs on GitHub.
 pre-push:
   commands:
-    skills-ci:
-      run: scripts/check.sh
+    check:
+      use_stdin: true
+      run: .ci/bin/ci-pre-push

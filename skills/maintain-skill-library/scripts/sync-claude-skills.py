@@ -5,6 +5,8 @@
   Grok ponytail plugin skills (found by glob, so plugin hash changes self-heal).
 - Host built-in copies are reported for review. Scheduled sync never archives
   a real directory or republishes host-specific copies into another client.
+- This repo's own skills are reported when ~/.agents/skills holds a copy of one
+  (it drifts) or lacks it, and when the checkout serving them is off main.
 - ~/.local/share/node-current points at the nvm default Node, so MCP configs
   never pin a version.
 
@@ -13,13 +15,15 @@ Real directories and claude.ai downloads (skills/synced) are left alone.
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 HOME = Path.home()
 CANON = HOME / ".agents/skills"
 HOST_BUILTINS = HOME / ".cursor/skills-cursor"
 PONYTAIL = HOME / ".grok/installed-plugins"
-# Unused plugin extras (2026-10-14 audit).
+# Unused plugin extras (2026-10-14 audit). Skipped in the canonical library too,
+# so client views do not link them. The canonical folders stay in place.
 PONYTAIL_SKIP = {"ponytail-audit", "ponytail-debt", "ponytail-gain", "ponytail-help"}
 # Claude-only skips (2026-10-15 audit): built-ins cover these; asc-* are linked per App Store project.
 CLAUDE_SKIP = {"code-review", "find-skills", "canvas"}
@@ -31,6 +35,8 @@ VIEWS = {"claude": HOME / ".claude/skills", "cursor": HOME / ".cursor/skills"}
 APP_OWNED = (str(HOME / ".local/share/ego"),)
 # Link targets this script may prune when the skill leaves the canonical set.
 MANAGED_ROOTS = (".agents/skills", "ponytail-", "Projects/Agent Skills/skills/", "Projects/Stacks/skills/")
+# The skills folder this script lives in: the Agent Skills checkout, unless a copy is running.
+OWN_SKILLS = Path(__file__).resolve().parents[2]
 NVM = HOME / ".nvm"
 NODE_LINK = HOME / ".local/share/node-current"
 
@@ -55,6 +61,45 @@ def host_copies() -> list[str]:
     return found
 
 
+def unlinked_own_skills() -> list[str]:
+    """This repo's skills that ~/.agents/skills does not link to: a copy drifts, a missing one never loads."""
+    found = []
+    for skill in sorted(OWN_SKILLS.iterdir()) if OWN_SKILLS.is_dir() else []:
+        if not (skill / "SKILL.md").is_file():
+            continue
+        entry = CANON / skill.name
+        if entry.is_symlink():
+            if entry.resolve() == skill.resolve():
+                continue
+            state = "links elsewhere"
+        else:
+            state = "copy" if entry.exists() else "missing"
+        found.append(f"{skill.name} ({state})")
+    return found
+
+
+def own_git(*args: str) -> str:
+    """Output of a git query on this checkout; empty when git is absent or it is not a repository."""
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+    try:
+        done = subprocess.run(["git", "-C", str(OWN_SKILLS), *args], capture_output=True, text=True, env=env)
+    except OSError:
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def branch_off_main() -> str:
+    """The checked-out branch when it is not main; linked skills and both launchd jobs run from it."""
+    branch = own_git("symbolic-ref", "--short", "-q", "HEAD")
+    return "" if branch == "main" else branch
+
+
+def is_linked_worktree() -> bool:
+    """A git worktree of the repo: the live links point at the main checkout, so it has nothing to report."""
+    dirs = own_git("rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir").split("\n")
+    return len(dirs) == 2 and dirs[0] != dirs[1]
+
+
 def source_of(path: Path) -> Path:
     """Link straight to the source, not through another link (SKL-011), except app-owned links."""
     if path.is_symlink() and os.readlink(path).startswith(APP_OWNED):
@@ -69,7 +114,7 @@ def source_of(path: Path) -> Path:
 def wanted() -> dict[str, Path]:
     found: dict[str, Path] = {}
     for path in sorted(CANON.iterdir()) if CANON.is_dir() else []:
-        if is_host_copy(path):
+        if is_host_copy(path) or path.name in PONYTAIL_SKIP:
             continue
         if not path.name.startswith(".") and (path / "SKILL.md").is_file():
             found[path.name] = source_of(path)
@@ -135,6 +180,15 @@ def main() -> int:
     copies = host_copies()
     if copies:
         print(f"host-specific copies retained for review: {', '.join(copies)}")
+    if OWN_SKILLS.resolve() == CANON.resolve():
+        print("running from a copy in ~/.agents/skills, not the Agent Skills checkout")
+    elif not is_linked_worktree():
+        unlinked = unlinked_own_skills()
+        if unlinked:
+            print(f"own skills not linked from ~/.agents/skills: {', '.join(unlinked)}")
+        branch = branch_off_main()
+        if branch:
+            print(f"Agent Skills checkout is on {branch}, not main: linked skills are served from that branch")
     targets = wanted()
     for host, dest in VIEWS.items():
         view = targets if host != "claude" else {

@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# ci-check [rev]   (default HEAD)
+# Runs `just check` for exactly that commit and records a receipt on pass.
+# - Working tree clean and HEAD is that commit: runs in place (warm caches).
+# - Otherwise: runs in a reusable detached worktree under ~/.local/state/ci/worktrees
+#   (CI_WORKTREES), so uncommitted edits never leak into the result. Not under ~/.cache:
+#   Biome 2.6 skips its nested-config scan for any path with a `.cache` folder in it, so
+#   a repo with a second biome.json linted with the wrong rules there. Ignored files there
+#   (node_modules, DerivedData) persist between runs; `just setup` runs first
+#   when the repo has that recipe.
+# A commit that already has a receipt is not checked again (CI_FORCE=1 rechecks).
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+sha="$(git -C "$root" rev-parse "${1:-HEAD}^{commit}")"
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/ci"
+worktrees="${CI_WORKTREES:-${XDG_STATE_HOME:-$HOME/.local/state}/ci/worktrees}"
+slug="$(git -C "$root" remote get-url origin 2>/dev/null | sed -E 's#.*github\.com[:/]##; s#\.git$##; s#/#__#')"
+slug="${slug:-$(basename "$root")}"
+receipt="$cache/receipts/$slug/$sha"
+# Same tree = same files = same result: an amended message, a squash-merge of an
+# up-to-date PR, or a revert-of-revert reuses the earlier pass.
+tree_receipt="$cache/receipts/$slug/tree-$(git -C "$root" rev-parse "$sha^{tree}")"
+
+if [[ "${CI_FORCE:-0}" != 1 ]]; then
+  if [[ -f "$receipt" ]]; then
+    echo "ci: $sha already passed ($(cat "$receipt"))"
+    exit 0
+  fi
+  if [[ -f "$tree_receipt" ]]; then
+    echo "$(cat "$tree_receipt") (same tree)" >"$receipt"
+    echo "ci: $sha has the same tree as a commit that passed ($(cat "$tree_receipt"))"
+    exit 0
+  fi
+fi
+
+dir="$root"
+if [[ "$(git -C "$root" rev-parse HEAD)" != "$sha" || -n "$(git -C "$root" status --porcelain)" ]]; then
+  dir="$worktrees/$slug"
+  old="$cache/worktrees/$slug"   # where they lived before; move it, keep its warm caches
+  if [[ ! -e "$dir" && -e "$old/.git" ]]; then
+    mkdir -p "$worktrees"
+    git -C "$root" worktree move "$old" "$dir"
+  fi
+  if [[ ! -d "$dir/.git" && ! -f "$dir/.git" ]]; then
+    mkdir -p "$(dirname "$dir")"
+    # -f: the folder can be gone while git still lists it (cache cleared by hand).
+    git -C "$root" worktree add --detach -f -q "$dir" "$sha"
+  else
+    git -C "$dir" checkout -q --detach -f "$sha"
+    git -C "$dir" clean -fdq   # untracked only; ignored caches stay
+  fi
+  echo "ci: tree has uncommitted changes or HEAD != $sha; checking the commit in $dir"
+  if [[ " $(cd "$dir" && just --summary) " == *" setup "* ]]; then
+    (cd "$dir" && just setup)
+  fi
+fi
+
+# A commit on the default branch tests everything; any other commit (a PR) tests
+# only what its diff reaches (ci-test reads CI_BASE). CI_BASE= forces everything.
+mode=full
+if [[ -z "${CI_BASE+set}" ]]; then
+  default="$(git -C "$root" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)"
+  if git -C "$root" rev-parse -q --verify "$default" >/dev/null && ! git -C "$root" merge-base --is-ancestor "$sha" "$default"; then
+    CI_BASE="$(git -C "$root" merge-base "$default" "$sha")"
+  else
+    CI_BASE=""
+  fi
+fi
+[[ -n "$CI_BASE" ]] && mode="diff-only from ${CI_BASE:0:9}"
+export CI_BASE
+
+s=$EPOCHREALTIME
+(cd "$dir" && just check)
+secs="$(printf '%.0f' "$(bc <<<"$EPOCHREALTIME - $s")")"
+mkdir -p "$(dirname "$receipt")"
+echo "pass ${secs}s $(hostname -s) $(date -u +%Y-%m-%dT%H:%M:%SZ) tests=$mode" >"$receipt"
+cp "$receipt" "$tree_receipt"
+echo "ci: PASS $sha in ${secs}s"
