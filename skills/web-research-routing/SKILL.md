@@ -1,6 +1,6 @@
 ---
 name: web-research-routing
-description: Use when choosing a paid search or extraction tool (Exa, Parallel, Firecrawl, treg) or writing a sourced research report. Not needed for a quick built-in search.
+description: Use when choosing a search or extraction tool (Firecrawl Local, Exa, Parallel, treg) or writing a sourced research report. Not needed for a quick built-in search.
 ---
 
 # Web research routing
@@ -12,17 +12,18 @@ This skill is for reading and research. Doing a task on a website (search fares,
 | Order | Tool | Use for | Cost / key |
 |---|---|---|---|
 | 1 | Built-in web search/fetch, free X reads | Quick lookups, single pages, current posts | Free |
-| 2 | Host browser read as text (Claude desktop browser pane, else `ego-browser`) | A JavaScript-heavy page the fetch can't read | Free |
-| 3 | Exa (`api.exa.ai`) | Most accurate or semantic search, "find companies/pages like X", search with page contents | Free tier, $10/mo credit; `EXA_API_KEY` |
-| 4 | Parallel (`api.parallel.ai`) | Multi-source deep research tasks, bulk extraction, FindAll lists, monitors | $5/mo free; `PARALLEL_API_KEY` |
-| 5 | Firecrawl (MCP) | Whole-site crawls/maps, or a JS page the browser can't read | 1,000 free credits/mo; never upgrade the plan |
+| 2 | Firecrawl Local (`firecrawl` MCP, or the v2 API at `http://127.0.0.1:3002`) | Scrape, crawl, map and batch scrape, including JavaScript-heavy pages and whole sites | Free; runs on this Mac with local Chrome |
+| 3 | Host browser read as text (Claude desktop browser pane, else `ego-browser`) | A page that needs Cohen's sign-in, or one Firecrawl Local can't read | Free |
+| 4 | Exa (`api.exa.ai`) | Most accurate or semantic search, "find companies/pages like X", search with page contents | Free tier, $10/mo credit; `EXA_API_KEY` |
+| 5 | Parallel (`api.parallel.ai`) | Multi-source deep research tasks, bulk extraction, FindAll lists, monitors | $5/mo free; `PARALLEL_API_KEY` |
 | 6 | treg (MCP in Claude Code; also a Grok Bot connector) | One-off specialty paid APIs: company/people data, enrichment | Pay-per-call; check cost before calling |
 
 Rules:
 - Escalate only when the cheaper tool fails or cannot do the task.
 - Parallel: default to `lite`/`base` (or fast) processors. Use `pro`/`ultra` only when Cohen asks.
-- If a key env var is missing, say so; do not search for or read key files. Claude desktop Code-tab sessions do not have `EXA_API_KEY` or `PARALLEL_API_KEY`; use steps 1, 2 and 5 there.
-- Firecrawl out of credits: do not retry with other parameters. Use step 2 and end the answer with the billing line Firecrawl returns.
+- If a key env var is missing, say so; do not search for or read key files. Claude desktop Code-tab sessions do not have `EXA_API_KEY` or `PARALLEL_API_KEY`; use steps 1, 2 and 3 there.
+- Firecrawl Cloud is only for what Local can't do: `search` and pages that block this Mac. The `firecrawl` MCP sends those to Cloud on its own (`FIRECRAWL_CLOUD=auto`); everything else stays local. Cloud calls draw on the 1,000 free credits/mo; never upgrade the plan.
+- Firecrawl Cloud out of credits: do not retry with other parameters. Use step 1 for search or step 3 for a blocked page, and end the answer with the billing line Firecrawl returns.
 - Dropped tools, never suggest: Context7, Arc, Tavily, SerpAPI, Perplexity.
 
 ## Research report
