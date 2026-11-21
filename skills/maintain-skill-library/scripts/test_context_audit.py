@@ -82,8 +82,9 @@ class ContextAuditTests(unittest.TestCase):
 
     def test_pre_push_runs_the_gate(self):
         repo = Path(__file__).resolve().parents[3]
-        if not (repo / 'lefthook.yml').is_file():
+        if not (repo / 'justfile').is_file():
             self.skipTest('installed copy has no repo checkout')
+        self.assertTrue((repo / 'lefthook.yml').is_file())
         self.assertTrue(os.access(repo / 'scripts/check.sh', os.X_OK))
         self.assertIn('unset $(git rev-parse --local-env-vars)', (repo / 'scripts/check.sh').read_text())
         # Pre-push runs `just check` (through the vendored CI kit), and `check` runs the gate.
