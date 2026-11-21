@@ -1,1 +1,1 @@
-Use when investigating TestFlight crashes, beta feedback, hangs, disk writes, launch diagnostics, or build/app performance reports with asc.
+Use when fetching and investigating TestFlight crashes, beta feedback, hangs, disk writes, launch diagnostics, or build/app performance reports from App Store Connect with asc.

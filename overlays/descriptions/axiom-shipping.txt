@@ -1,1 +1,1 @@
-Use when submitting to the App Store, handling a rejection or appeal, privacy manifests, age ratings, export compliance, Xcode Cloud, or TestFlight crash triage.
+Use when submitting to the App Store, handling a rejection or appeal, Xcode Cloud, privacy manifests, age ratings, export compliance, or symbolicating crash logs. asc CLI releases: asc-release-flow.

@@ -1,1 +1,1 @@
-Use when fixing Swift Concurrency issues: async/await, actors, @MainActor, Sendable, data races, Swift 6 migration, or concurrency warnings.
+Use when designing, reviewing or fixing Swift Concurrency: async/await, actors and isolation boundaries, @MainActor, Sendable, data races, Swift 6 migration, or concurrency warnings.

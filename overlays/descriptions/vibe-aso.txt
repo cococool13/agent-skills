@@ -1,1 +1,1 @@
-Use when running a full multi-locale ASO pass: keyword research, metadata, localization, screenshot copy, pricing.
+Use when running an ASO pass across several locales: keyword research, metadata, localization, screenshot copy, pricing. Single-locale listing work goes to aso.

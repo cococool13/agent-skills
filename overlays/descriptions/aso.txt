@@ -1,1 +1,1 @@
-Use when writing or auditing one App Store listing's copy, keywords, or creatives.
+Use when writing or auditing one App Store listing in one locale: copy, keywords or creatives. ASO passes across several locales go to vibe-aso.
