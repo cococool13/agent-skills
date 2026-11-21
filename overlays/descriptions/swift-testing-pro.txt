@@ -1,0 +1,1 @@
+Use when writing, reviewing or migrating tests with Swift Testing: @Test, #expect, traits, parameterized tests, or moving XCTest suites to it. General Swift code goes to write-swift.

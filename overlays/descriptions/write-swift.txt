@@ -1,1 +1,1 @@
-Use when writing, reviewing or migrating Swift: value types, Swift 6 concurrency, generics, API design, performance, Swift Testing, macros.
+Use when writing, reviewing or migrating general Swift: value types, generics, API design, performance, macros. Concurrency bugs go to swift-concurrency, Swift Testing work to swift-testing-pro.
