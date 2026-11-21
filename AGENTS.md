@@ -4,7 +4,7 @@ Personal agent skills library. Installed to `~/.agents/skills` via the skills CL
 
 ## Commands
 
-Checks run on this Mac. `just check` before claiming done (same command as pre-push and `ship`; it runs `scripts/check.sh`, the tests below and gitleaks in parallel); `just check-fast` while working. Never `--no-verify`. Land work only with `.ci/bin/ship`: it checks the exact commit, posts `ci/just-check`, and merges or labels the PR `needs-cohen`. Merging never deploys. The public `skills-ci` workflow still runs `scripts/check.sh` on GitHub. After cloning, run `lefthook install` once to get the hooks.
+Checks run on this Mac. `just check` before claiming done (same command as pre-push and `ship`; it runs `scripts/check.sh`, the tests below and gitleaks in parallel); `just check-fast` while working. Never `--no-verify`. Land work only with `.ci/bin/ship`: it checks the exact commit, posts `ci/just-check`, and merges or labels the PR `needs-cohen`. Merging never deploys. After cloning, run `lefthook install` once to get the hooks.
 
 ```bash
 scripts/check.sh
