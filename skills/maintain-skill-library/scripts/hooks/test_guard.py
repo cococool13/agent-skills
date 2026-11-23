@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HOOKS = Path(sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else Path(__file__).parent)
@@ -365,6 +366,12 @@ def run(hook, data, env=None):
     return subprocess.run([str(HOOKS / hook)], input=raw, text=True, capture_output=True, timeout=10, env=env)
 
 
+def run_all(hook, inputs):
+    """run() over many inputs at once; each hook call is its own process, so order does not matter."""
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
+        return list(pool.map(lambda data: run(hook, data), inputs))
+
+
 def shell_input(client, command):
     if client == "cursor":
         return {"hook_event_name": "beforeShellExecution", "command": command, "cwd": CWD,
@@ -389,8 +396,8 @@ def read_input(client, path):
 
 
 class GuardContract(unittest.TestCase):
-    def check(self, hook, client, data, expect):
-        r = run(hook, data)
+    def check(self, hook, client, data, expect, r=None):
+        r = r if r is not None else run(hook, data)
         self.assertEqual(r.returncode, 0, r.stderr)
         if client in ("claude", "codex"):
             if expect == "allow":
@@ -415,10 +422,11 @@ class GuardContract(unittest.TestCase):
                 self.assertTrue(set(out) <= {"permission", "user_message", "agent_message"})
 
     def matrix(self, commands, expect):
-        for client in ("claude", "codex", "cursor"):
-            for command in commands:
-                with self.subTest(client=client, command=command):
-                    self.check("guard-shell.py", client, shell_input(client, command), expect)
+        cases = [(client, command) for client in ("claude", "codex", "cursor") for command in commands]
+        results = run_all("guard-shell.py", [shell_input(client, command) for client, command in cases])
+        for (client, command), r in zip(cases, results):
+            with self.subTest(client=client, command=command):
+                self.check("guard-shell.py", client, shell_input(client, command), expect, r)
 
     def test_deny(self):
         self.matrix(DENY + EXTRA_DENY, "deny")

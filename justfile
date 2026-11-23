@@ -35,16 +35,12 @@ hook-selftests:
     /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/lint-dirty.py --selftest
 
 # AGENTS.md "Commands".
-# The two files take 33 s and 41 s; each makes its own temp repos, so they run at once.
+# Each test makes its own temp repos, so tests run spread across processes (scripts/unittest-par.py).
 ship-tests:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python3 -m unittest discover -s skills/ship/scripts -p 'test_ship.py' & a=$!
-    python3 -m unittest discover -s skills/ship/scripts -p 'test_ship_all.py' & b=$!
-    rc=0; wait "$a" || rc=1; wait "$b" || rc=1; exit "$rc"
+    python3 scripts/unittest-par.py skills/ship/scripts test_ship.py test_ship_all.py
 
 library-tests:
-    python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_*.py'
+    python3 scripts/unittest-par.py skills/maintain-skill-library/scripts 'test_*.py'
 
 # Commits this branch adds, with the repo's .gitleaks.toml.
 gitleaks:
