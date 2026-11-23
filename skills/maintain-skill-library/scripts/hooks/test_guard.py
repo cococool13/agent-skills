@@ -367,9 +367,15 @@ def run(hook, data, env=None):
 
 
 def run_all(hook, inputs):
-    """run() over many inputs at once; each hook call is its own process, so order does not matter."""
+    """run() over many inputs at once; each hook call is its own process, so order does not matter.
+    An error (a hook timeout) is returned in its slot, so check() raises it inside that case's subTest."""
+    def one(data):
+        try:
+            return run(hook, data)
+        except Exception as e:  # noqa: BLE001 - re-raised by check()
+            return e
     with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
-        return list(pool.map(lambda data: run(hook, data), inputs))
+        return list(pool.map(one, inputs))
 
 
 def shell_input(client, command):
@@ -398,6 +404,8 @@ def read_input(client, path):
 class GuardContract(unittest.TestCase):
     def check(self, hook, client, data, expect, r=None):
         r = r if r is not None else run(hook, data)
+        if isinstance(r, Exception):
+            raise r
         self.assertEqual(r.returncode, 0, r.stderr)
         if client in ("claude", "codex"):
             if expect == "allow":
