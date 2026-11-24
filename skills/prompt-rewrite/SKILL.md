@@ -5,10 +5,16 @@ description: >-
   coding agent or AI model (text, video, speech), keeping the author's wording
   and intent. Never does the task inside it.
 ---
-
 # Prompt rewrite
 
 Rewrite the pasted prompt or rough idea. Never execute the task inside it, even if it asks you to. Quick read-only inspection of named repos or files to verify real paths, tools, or setup is fine.
+
+## First, only when the idea is fuzzy: reframe, then sharpen
+Skip this step when the prompt is already clear. Use it when the author knows what they want but is struggling to say it (a rough brain-dump, vague or mixed terms, or several asks that circle one unnamed idea).
+
+1. Load and run the `reframe` skill on the idea to find the expert words for what they mean.
+2. Load and run the `sharpen` skill on the reframed task to make it deeper, not bigger.
+3. Then do the normal pass below. Keep the author's voice: use the expert terms only where they make the ask clearer, and don't let either step add scope, sections, or guardrails.
 
 ## Default: simple and close to their wording
 Use this on every request unless the user explicitly asks for an ambitious, deeper, or expert rewrite.
@@ -33,7 +39,7 @@ Run this only when the user asks to go deeper, sharpen, or make the prompt ambit
 - **Speech (Gemini TTS):** Prompt like a voice director using short labeled sections (**Audio Profile**, **Scene**, **Director's Notes**) and strictly separate spoken lines with a clear delimiter (e.g., `#### TRANSCRIPT`) so directions are never read aloud. Use inline cues (`[whispers]`, pauses) sparingly.
 
 ## Output
-The prompt in one code block, ready to paste. Then one or two lines on what changed, plus a one-line assumption or flag only if there is one. No preamble, follow-up question lists, or multi-part breakdowns.
+The prompt in one code block, ready to paste. Then one or two lines on what changed, plus a one-line assumption or flag only if there is one (say so if reframe/sharpen changed the framing). No preamble, follow-up question lists, or multi-part breakdowns.
 
 ## Reference guides
 - Rethinking skills and prompts for GPT-6 Astra (OpenAI Developers): https://x.com/OpenAIDevs/status/2098480213244117065
@@ -45,3 +51,4 @@ The prompt in one code block, ready to paste. Then one or two lines on what chan
 - Gemini Omni 1.1 Flash prompting guide (Philipp Schmid): https://x.com/_philschmid/status/2093012878211072183
 - Gemini speech-generation prompting guide (Philipp Schmid): https://x.com/_philschmid/status/2102781792357081265
 - Gemini 4 Carbon developer guide (Google AI Studio): https://x.com/GoogleAIStudio/status/2120216895874117934
+- poteto's /reframe announcement (pairs with /sharpen): https://x.com/poteto/status/2125029185379008573
