@@ -31,8 +31,7 @@ gate:
 
 # The selftests the lefthook pre-commit runs with the guard tests.
 hook-selftests:
-    /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/session-budget.py --selftest
-    /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/lint-dirty.py --selftest
+    /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/stop-check.py --selftest
 
 # AGENTS.md "Commands".
 ship-tests:
