@@ -1,6 +1,6 @@
 # CI contract. Agents, the pre-push hook and `ship` all run `just check`.
 # Kit: .ci/ (vendored from agent-config ci/; `just ci-drift` shows drift).
-# `gate` is scripts/check.sh, the same script the public skills-ci workflow runs on GitHub.
+# `gate` is scripts/check.sh.
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Everything, in parallel.
@@ -31,8 +31,7 @@ gate:
 
 # The selftests the lefthook pre-commit runs with the guard tests.
 hook-selftests:
-    /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/session-budget.py --selftest
-    /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/lint-dirty.py --selftest
+    /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/stop-check.py --selftest
 
 # AGENTS.md "Commands".
 ship-tests:
