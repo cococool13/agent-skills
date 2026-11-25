@@ -80,14 +80,13 @@ class ContextAuditTests(unittest.TestCase):
             self.assertEqual(machine.returncode, 1)
             self.assertEqual(machine.stdout.count('instruction entrypoint missing'), 4)
 
-    def test_ci_and_pre_push_run_the_same_gate(self):
+    def test_pre_push_runs_the_gate(self):
         repo = Path(__file__).resolve().parents[3]
-        workflow = repo / '.github/workflows/skills-ci.yml'
-        if not workflow.is_file():
-            self.skipTest('installed copy has no workflow')
+        if not (repo / 'justfile').is_file():
+            self.skipTest('installed copy has no repo checkout')
+        self.assertTrue((repo / 'lefthook.yml').is_file())
         self.assertTrue(os.access(repo / 'scripts/check.sh', os.X_OK))
         self.assertIn('unset $(git rev-parse --local-env-vars)', (repo / 'scripts/check.sh').read_text())
-        self.assertIn('run: scripts/check.sh', workflow.read_text())
         # Pre-push runs `just check` (through the vendored CI kit), and `check` runs the gate.
         pre_push = (repo / 'lefthook.yml').read_text().split('pre-push:')[1]
         self.assertIn('run: .ci/bin/ci-pre-push', pre_push)

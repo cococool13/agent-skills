@@ -74,7 +74,7 @@
         "kind": {"type": "string", "enum": ["none", "oauth", "bearer_env", "header_env"]},
         "env": {"$ref": "#/$defs/env_name"},
         "header": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]*$"},
-        "claude_cli": {"type": "string", "enum": ["oauth", "bearer_env", "header_env"], "description": "Override when Claude Code authenticates differently (it has OAuth for Refero and PostHog)."}
+        "claude_cli": {"type": "string", "enum": ["oauth", "bearer_env", "header_env"], "description": "Override when Claude Code authenticates differently (it has OAuth for Mobbin and PostHog; Refero may use a bearer token)."}
       },
       "allOf": [
         {"if": {"properties": {"kind": {"enum": ["bearer_env", "header_env"]}}}, "then": {"required": ["env"]}},

@@ -17,8 +17,8 @@ Choose the skills and agents you use. Review any example paths before running a 
 | Build and release | [Start a product](skills/new-build-recipe/SKILL.md), [audit a repo](skills/repo-upgrade/SKILL.md), [ship a change](skills/ship/SKILL.md), [deploy to Cloudflare](skills/deploy-cloudflare/SKILL.md), [resolve a scanner block](skills/gitleaks-preflight/SKILL.md) |
 | Audit and harden | [Audit an iPhone app](skills/app-upgrade/SKILL.md), [audit a Mac app](skills/mac-app-upgrade/SKILL.md), [audit a website](skills/website-upgrade/SKILL.md) |
 | Agent setup | [Audit your agent setup](skills/ai-stack-audit/SKILL.md), [maintain your skill library](skills/maintain-skill-library/SKILL.md), [create a hook](skills/create-hook/SKILL.md), [build a canvas](skills/canvas/SKILL.md), [rewrite a prompt](skills/prompt-rewrite/SKILL.md) |
-| Launch and research | [Test a launch](skills/launch-qa-five-personas/SKILL.md), [review launch copy](skills/preship-four-personas/SKILL.md), [check billing and analytics](skills/stack-check/SKILL.md), [choose a research tool](skills/web-research-routing/SKILL.md) |
+| Launch and research | [Test a launch](skills/launch-qa-five-personas/SKILL.md), [review launch copy](skills/preship-four-personas/SKILL.md), [check billing and analytics](skills/stack-check/SKILL.md), [choose a research tool](skills/web-research-routing/SKILL.md), [research UI from real products](skills/mobbin-design/SKILL.md) |
 
 ## From their authors
 
-[Refero](https://github.com/referodesign/refero_skill) · [Motion](https://github.com/motiondivision/ai-kit) · [Ponytail](https://github.com/DietrichGebert/ponytail) · [ASO](https://github.com/alexszczurek/before-skills) · [Grilling](https://github.com/mattpocock/skills)
+[Mobbin](https://docs.mobbin.com/mcp) · [Refero](https://github.com/referodesign/refero_skill) · [Motion](https://github.com/motiondivision/ai-kit) · [Ponytail](https://github.com/DietrichGebert/ponytail) · [ASO](https://github.com/alexszczurek/before-skills) · [Grilling](https://github.com/mattpocock/skills)

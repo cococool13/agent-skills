@@ -21,7 +21,7 @@ Skip this phase when the build has no existing product to learn from.
 Read `~/.agents/design-refs/DESIGN-PREFS.md`, section "Tools, skills, and when", and use it as a map. Cohen's dislikes and the chosen mood win over a skill default.
 
 - Pick the mood, then call Stacks `suggest_for_task` once, `get_board_for_project` when a board exists, then `suggest_pack_for_task` and `search_design`.
-- Use `refero-design` for real app screens and flows. Use Inspo when that MCP is connected.
+- Use `mobbin-design` for real app and website screens, flows, and sections (`search_screens`, `search_flows`, `search_sections`). Use Inspo when that MCP is connected. Refero is optional and secondary (prepaid through August 2027).
 - One canvas before code: Paper when it is connected. Otherwise use the tool that section names for this deliverable (Stitch, Figma `use_figma`, `tesseract-design`, or `canvas`).
 - Then `hallmark` for a new site or page. `web-designer` for a redesign of an existing site. `app-designer` for iPhone. Hallmark stays off an existing design unless the prompt says `/hallmark redesign`.
 
