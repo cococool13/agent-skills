@@ -536,6 +536,12 @@ class GuardContract(unittest.TestCase):
             "lefthook uninstall",
             "git config core.hooksPath /dev/null",
             "git config --global core.hooksPath /tmp/h",
+            "git config --unset core.hooksPath",
+            "git config --unset-all core.hooksPath",
+            "git config --add core.hooksPath /tmp/h",
+            "git config set core.hooksPath /tmp/h",
+            "git config unset core.hooksPath",
+            "git config --local --replace-all core.hooksPath /tmp/h",
             "git push origin main",
             "git push origin master",
             "git push origin HEAD:main",
@@ -543,6 +549,12 @@ class GuardContract(unittest.TestCase):
         ], "deny")
         self.matrix([
             "git config --get core.hooksPath",
+            # A bare key with no value is a read; refusing it blocked hook audits.
+            "git config core.hooksPath",
+            "git config --local core.hooksPath",
+            "git -C repo config core.hooksPath",
+            "git config get core.hooksPath",
+            "hp=$(git config core.hooksPath); echo $hp",
             "git push -u origin feat",
         ], "allow")
         with tempfile.TemporaryDirectory() as tmp:

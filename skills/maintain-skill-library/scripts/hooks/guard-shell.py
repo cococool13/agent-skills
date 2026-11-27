@@ -149,6 +149,42 @@ R_SECRET = "Do not read secret/credential files. Check key names in code or docs
 R_ENV = "Do not print environment values, Keychain items, tokens, or use live Stripe."
 R_FORCE = "Force-push is blocked. On a branch other than main, --force-with-lease can be approved by Cohen; otherwise push a new branch."
 R_PUSH_MAIN = "Direct push to main/master is blocked. Work on a branch and use ship."
+def _git_config_read(rest: list) -> bool:
+    """True when `git config <rest>` only reads.
+
+    Reads: an explicit read flag, the `get`/`list` subcommands, or a bare key
+    with no value (`git config core.hooksPath`). Anything that sets, adds,
+    unsets, renames, edits or passes a value is a write.
+    """
+    read_flags = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l"}
+    write_flags = {"--unset", "--unset-all", "--add", "--replace-all", "--rename-section",
+                   "--remove-section", "--edit", "-e"}
+    scope_flags = {"--local", "--global", "--system", "--worktree", "--show-origin",
+                   "--show-scope", "--null", "-z", "--name-only", "--includes", "--no-includes",
+                   "--type", "--bool", "--int", "--path", "--expiry-date", "--bool-or-int"}
+    takes_value = {"--file", "-f", "--blob", "--type", "--default"}
+    words, skip = [], False
+    for a in rest:
+        if skip:
+            skip = False
+            continue
+        if a in read_flags:
+            return True
+        if a in write_flags:
+            return False
+        if a in takes_value:
+            skip = True
+            continue
+        if a.startswith("-"):
+            if a.split("=")[0] in scope_flags | takes_value:
+                continue
+            return False  # unknown flag: assume it writes
+        words.append(a)
+    if words and words[0] in ("get", "list"):
+        return True
+    return len(words) == 1 and words[0] not in ("set", "unset", "rename-section", "remove-section", "edit")
+
+
 R_HOOKS = "Disabling or changing git hooks (LEFTHOOK/LEFTHOOK_EXCLUDE, lefthook uninstall, core.hooksPath) is blocked. Fix the failure instead."
 R_RM = "Recursive delete is allowed only inside the working directory, ~/Projects/<repo> build dirs, or temp dirs."
 R_RM_ASK = "Recursive delete with an unresolved target. Wait for Cohen's approval."
@@ -913,8 +949,7 @@ def _git_verdict(args, cwd=None):
         i += 1
     sub, rest = (args[i] if i < len(args) else ""), args[i + 1:]
     if sub == "config":
-        read_only = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l", "--show-origin", "--show-scope"}
-        if any("core.hookspath" in a.lower() for a in rest) and not (set(rest) & read_only):
+        if any("core.hookspath" in a.lower() for a in rest) and not _git_config_read(rest):
             return "deny", R_HOOKS
     if sub == "push":
         level, pos, j, lease, wide = "allow", [], 0, False, False
