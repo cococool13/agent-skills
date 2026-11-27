@@ -25,8 +25,21 @@ if "--no-verify" in cmd:
     deny("--no-verify skips the hooks. Fix the failure instead.")
 if re.search(r"\bLEFTHOOK(_EXCLUDE)?=", cmd):
     deny("LEFTHOOK/LEFTHOOK_EXCLUDE turns hooks off. Fix the failure instead.")
-if "core.hooksPath" in cmd or re.search(r"\blefthook\s+uninstall\b", cmd):
+if re.search(r"\blefthook\s+uninstall\b", cmd) or re.search(r"-c\s*core\.hooksPath=", cmd, re.I):
     deny("changing or removing git hooks is Cohen's call.")
+
+
+def config_writes_hooks_path(args):
+    """`git config` args that set or unset core.hooksPath. A bare key is a read."""
+    if not any(a.lower() == "core.hookspath" for a in args):
+        return False
+    if any(a in ("--get", "--get-all", "--get-regexp", "--list", "-l") for a in args):
+        return False
+    words = [a for a in args if not a.startswith("-")]
+    if words and words[0] in ("get", "list"):
+        return False
+    writes = ("--unset", "--unset-all", "--add", "--replace-all", "--edit", "-e")
+    return any(a in writes for a in args) or len(words) != 1
 if re.search(r"\bgh\s+pr\s+merge\b", cmd):
     deny("merge only through `ship` (it checks the exact commit first).")
 if re.search(r"\bgh\s+api\b", cmd) and re.search(
@@ -56,7 +69,7 @@ def current_branch():
         return ""
 
 
-for seg in re.split(r"&&|\|\||;|\|", cmd):
+for seg in re.split(r"&&|\|\||;|\||\$\(|`|\)", cmd):
     try:
         t = shlex.split(seg)
     except ValueError:
@@ -72,6 +85,8 @@ for seg in re.split(r"&&|\|\||;|\|", cmd):
     if i >= len(t):
         continue
     sub, args = t[i], t[i + 1:]
+    if sub == "config" and config_writes_hooks_path(args):
+        deny("changing or removing git hooks is Cohen's call.")
     if sub == "commit":
         prev = ""
         for a in args:

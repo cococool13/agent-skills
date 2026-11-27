@@ -24,7 +24,14 @@ if [[ -z "$kit" ]]; then
 fi
 check=0
 [[ "${1:-}" == "--check" ]] && { check=1; shift; }
-repo="$(git -C "${1:-.}" rev-parse --show-toplevel)"
+repo="$(git -C "${1:-.}" rev-parse --show-toplevel 2>/dev/null)" || {
+  if [[ "$(git -C "${1:-.}" rev-parse --is-bare-repository 2>/dev/null)" == true ]]; then
+    echo "ci-sync: ${1:-$PWD} has core.bare=true, so git sees no work tree to copy .ci into. Sync a linked worktree (git worktree list), or set core.bare=false if this folder is a normal checkout." >&2
+  else
+    echo "ci-sync: ${1:-$PWD} is not inside a git work tree" >&2
+  fi
+  exit 2
+}
 [[ -d "$kit/bin" ]] || { echo "ci-sync: no kit at $kit (set CI_KIT)" >&2; exit 2; }
 
 if [[ "$check" == 1 ]]; then

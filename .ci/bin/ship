@@ -3,8 +3,9 @@
 # The only way agents land work. From a clean feature branch:
 #   1. lock the repo, fetch, merge origin/<default> in (no rebase, no force push)
 #   2. ci-check the exact commit (receipt = instant if already checked)
-#   3. push, post ci/just-check, open the PR if missing, claim it
-#   4. guardrail checks (bug-then-rule) when the repo has them
+#   3. claim an open PR (guardrail 2) before pushing, push, post ci/just-check,
+#      open the PR if missing and claim it
+#   4. guardrail checks (bug-then-rule) when the repo has them; guardrail 7 is retired
 #   5. sensitive paths (CI, hooks, workflows, wrangler, auth, billing, release,
 #      entitlements): label `needs-cohen` and stop. Otherwise squash-merge,
 #      pinned to the checked sha.
@@ -27,7 +28,9 @@ run() { if [[ "$dry" == 1 ]]; then echo "would run: $*"; else "$@"; fi; }
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
 branch="$(git symbolic-ref --short -q HEAD)" || die "detached HEAD; check out a branch"
-default="$(git symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+# No origin/HEAD (a clone that only fetched named branches): fall back to main, do not
+# let pipefail end ship with no message.
+default="$(git symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##' || true)"
 default="${default:-main}"
 [[ "$branch" != "$default" ]] || die "on $default; ship from a feature branch"
 [[ -z "$(git status --porcelain)" ]] || die "uncommitted changes; commit first"
@@ -50,17 +53,29 @@ sha="$(git rev-parse HEAD)"
 
 "$here/ci-check" "$sha"
 
+# Open PRs only: an old merged PR from a reused branch name must not be picked up.
+open_pr() { gh pr list --head "$branch" --state open --json number -q '.[0].number // empty' 2>/dev/null || true; }
+# Guardrail 2: claim before pushing, so a PR another agent holds is never pushed over.
+claim() {
+  [[ -n "$pr" && -x "$HOME/.agents/pr-claim" ]] || return 0
+  run "$HOME/.agents/pr-claim" claim "$repo" "$pr" "${CI_BOT:-agent}" "$sha" \
+    || die "PR #$pr is claimed by another agent (guardrail 2); nothing pushed"
+}
+pr="$(open_pr)"
+claim
+
 run git push -q -u origin "$branch"
 run "$here/ci-status" "$sha"
 
-# Open PRs only: an old merged PR from a reused branch name must not be picked up.
-open_pr() { gh pr list --head "$branch" --state open --json number -q '.[0].number // empty' 2>/dev/null || true; }
-pr="$(open_pr)"
 if [[ -z "$pr" ]]; then
   run gh pr create --fill --head "$branch" --base "$default"
-  [[ "$dry" == 1 ]] || pr="$(open_pr)"
+  if [[ "$dry" != 1 ]]; then
+    pr="$(open_pr)"
+    # Without the number the claim and guardrails below would be skipped without a word.
+    [[ -n "$pr" ]] || die "opened a PR for $branch but cannot find it; rerun ship"
+    claim
+  fi
 fi
-[[ -n "$pr" && -x "$HOME/.agents/pr-claim" ]] && run "$HOME/.agents/pr-claim" claim "$repo" "$pr" "${CI_BOT:-agent}" "$sha"
 
 changed="$(git diff --name-only "origin/$default...$sha")"
 
@@ -72,7 +87,8 @@ if [[ -n "$sensitive" ]]; then
     run gh label create needs-cohen --color D93F0B --description "Agent stopped: sensitive paths" -R "$repo" 2>/dev/null || true
     run gh pr edit "$pr" --add-label needs-cohen
   fi
-  echo "ship: not merging. PR #${pr:-?} is labelled needs-cohen."
+  [[ "$dry" == 1 ]] && echo "ship: dry run; PR #${pr:-?} would be labelled needs-cohen." \
+    || echo "ship: not merging. PR #${pr:-?} is labelled needs-cohen."
   exit 0
 fi
 
@@ -83,10 +99,7 @@ if [[ -n "$pr" && -d scripts/guardrails ]]; then
   PR_LABELS="$(gh pr view "$pr" --json labels -q '[.labels[].name]|join(",")')"
   CHANGED_FILES="$changed"
   export PR_TITLE PR_BODY PR_LABELS CHANGED_FILES
-  if [[ -x scripts/guardrails/check-reviewed-by.sh ]]; then
-    scripts/guardrails/check-reviewed-by.sh - "$sha" \
-      || die "guardrail 7: review the diff, then add 'Reviewed-by: claude @ $sha' to PR #$pr's body and rerun ship"
-  fi
+  # Guardrail 7 (Reviewed-by) was retired 2026-11-21: a vendored check-reviewed-by.sh is ignored.
   if [[ -x scripts/guardrails/check-bug-then-rule.sh ]]; then
     scripts/guardrails/check-bug-then-rule.sh "$PR_TITLE" - - \
       || die "guardrail 8 (bug, then rule) failed for PR #$pr; add the test or rule and a Rule: line"
@@ -95,4 +108,5 @@ fi
 
 [[ "$merge" == 1 ]] || { echo "ship: --no-merge; PR #${pr:-?} is ready at ${sha:0:9}"; exit 0; }
 run gh pr merge "${pr:-NEW}" --squash --delete-branch --match-head-commit "$sha"
-echo "ship: merged PR #${pr:-?} ($repo@${sha:0:9})"
+if [[ "$dry" == 1 ]]; then echo "ship: dry run; nothing pushed, opened or merged ($repo@${sha:0:9})"
+else echo "ship: merged PR #${pr:-?} ($repo@${sha:0:9})"; fi

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// ci-test <vitest|node|bun> [--dir pkg] [--full] [--shards N] [--files <glob>]... [--exclude <glob>]... [-- runner args...]
+// ci-test <vitest|node|bun> [--dir pkg] [--full] [--shards N] [--files <glob>]... [--exclude <glob>]... [--diff-root <path>]... [-- runner args...]
 //
 // Runs a repo's unit tests the fast way:
 // 1. Diff-only on PRs. When CI_BASE is set (ci-check sets it for any commit not
@@ -17,7 +17,12 @@
 // --dir runs from a package subdirectory (worker/, server/): its node_modules,
 // its config; --files globs are relative to it.
 // --exclude drops files from that list (globs relative to --dir).
-// --files defaults to every tracked JS/TS *.test.* / *.spec.* outside e2e/ and node_modules.
+// --files defaults to every tracked or new (untracked, not ignored) JS/TS *.test.* / *.spec.*
+// outside e2e/ and node_modules.
+// --diff-root adds a path outside --dir (relative to the repo root) to the diff, for tests
+// that import or read shared code or data there (../../fixtures). Repeatable; the env var
+// CI_TEST_DIFF_ROOTS (space-separated) adds the same for every call. Without it, a --dir run
+// only sees changes inside its own package.
 // Runner args after `--` go to every shard (e.g. -- --import tsx).
 import { $ } from "bun";
 import { builtinModules } from "node:module";
@@ -28,7 +33,7 @@ import { dirname, extname, join, resolve } from "node:path";
 const argv = process.argv.slice(2);
 const runner = argv.shift();
 if (!runner || !["vitest", "node", "bun"].includes(runner)) {
-  console.error("usage: ci-test <vitest|node|bun> [--dir pkg] [--full] [--shards N] [--files glob]... [--exclude glob]... [-- args]");
+  console.error("usage: ci-test <vitest|node|bun> [--dir pkg] [--full] [--shards N] [--files glob]... [--exclude glob]... [--diff-root path]... [-- args]");
   process.exit(2);
 }
 let shardsWanted = 0;
@@ -36,6 +41,7 @@ let dir = ".";
 let full = false;
 const globs: string[] = [];
 const excludes: string[] = [];
+const diffRoots: string[] = (process.env.CI_TEST_DIFF_ROOTS ?? "").split(/\s+/).filter(Boolean);
 let extra: string[] = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--shards") shardsWanted = Number(argv[++i]);
@@ -43,6 +49,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (argv[i] === "--full") full = true;
   else if (argv[i] === "--files") globs.push(argv[++i]);
   else if (argv[i] === "--exclude") excludes.push(argv[++i]);
+  else if (argv[i] === "--diff-root") diffRoots.push(argv[++i]);
   else if (argv[i] === "--") { extra = argv.slice(i + 1); break; }
   else { console.error(`ci-test: unknown option ${argv[i]}`); process.exit(2); }
 }
@@ -56,7 +63,7 @@ const pathspecs = globs.length ? globs.map((g) => `:(glob)${g}`) : [
 ];
 for (const g of excludes) pathspecs.push(`:(exclude,glob)${g}`);
 const testExt = /\.(test|spec)\.[cm]?[jt]sx?$/; // the default list skips *.test.sh and the like
-let files = (await $`git ls-files -- ${pathspecs}`.text()).split("\n")
+let files = (await $`git ls-files --cached --others --exclude-standard -- ${pathspecs}`.text()).split("\n")
   .filter((f) => f && existsSync(f) && (globs.length > 0 || testExt.test(f)));
 const all = files.length;
 
@@ -134,12 +141,14 @@ function affected(changed: Set<string>): string[] | "ALL" {
 const base = process.env.CI_BASE;
 if (base && full) console.log("ci-test: --full; running every test");
 if (base && !full) {
-  const out = await $`git diff --name-only ${base} -- . && git diff --name-only HEAD -- . && git ls-files --others --exclude-standard`.text();
+  const roots = [".", ...diffRoots.map((r) => `:(top)${r}`)];
+  // git diff prints repo-root paths; --full-name makes ls-files match.
+  const out = await $`git diff --name-only ${base} -- ${roots} && git diff --name-only HEAD -- ${roots} && git ls-files --full-name --others --exclude-standard -- ${roots}`.text();
   const changed = new Set(out.split("\n").filter(Boolean).map((f) => resolve(root, f)));
   const pick = affected(changed);
   if (pick !== "ALL") {
     files = pick;
-    console.log(`ci-test: diff from ${base.slice(0, 9)} reaches ${files.length} of ${all} test files`);
+    console.log(`ci-test: diff from ${base.slice(0, 9)} reaches ${files.length} of ${all} test files${files.length ? "" : " (skipped)"}`);
     if (!files.length) process.exit(0);
   }
 }
