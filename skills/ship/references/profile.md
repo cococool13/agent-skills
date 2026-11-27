@@ -138,8 +138,12 @@ Version URLs use the uploaded version's production resources. Use isolated
 Previews/environments for signup/payment/data-write tests. Durable Objects,
 migrations, first-ever deployments, and Pages have different release mechanics;
 use their documented command/CI adapter instead of forcing this Worker path.
-The previous deployment is recorded for recovery, but storage/migrations are
-not rolled back automatically. No global canary or automatic rollback is added.
+The previous deployment is recorded for recovery. Set `rollout_steps = [10, 100]`
+(strictly increasing percentages ending in 100) and `health_url` or `health_cmd`
+to run a gradual canary rollout with health/error checks between steps and
+automatic rollback to the previous version (`auto_rollback = true`, default when
+`rollout_steps` has intermediate steps) if any mid-rollout or post-promotion
+check fails. Storage/migrations are not rolled back automatically.
 
 ## Publishing and live checks
 

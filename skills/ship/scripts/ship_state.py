@@ -120,7 +120,8 @@ def load_profile(repo: Path, filename: str = '') -> dict:
     deploy = profile.get('deploy', {'mode': 'none'})
     if not isinstance(deploy, dict) or set(deploy) - {
         'mode', 'argv', 'verify', 'cwd', 'timeout', 'workflows', 'branch', 'event',
-        'wrangler', 'name', 'environment', 'config', 'account', 'identity_url', 'probe'}:
+        'wrangler', 'name', 'environment', 'config', 'account', 'identity_url', 'probe',
+        'rollout_steps', 'health_url', 'health_contains', 'health_status', 'health_cmd', 'auto_rollback'}:
         raise Blocked('invalid deploy configuration')
     if deploy.get('mode') not in ('none', 'ci', 'command', 'cloudflare'):
         raise Blocked('deploy.mode must be none, ci, command, or cloudflare')
@@ -143,6 +144,16 @@ def load_profile(repo: Path, filename: str = '') -> dict:
             raise Blocked('Cloudflare requires explicit name, environment, account and identity_url')
         commands([{'argv': deploy.get('wrangler', ['npx', '--no-install', 'wrangler'])}])
         commands([{'argv': deploy.get('probe')}])
+        if 'health_cmd' in deploy:
+            commands([{'argv': deploy['health_cmd']}])
+        if 'rollout_steps' in deploy:
+            steps = deploy['rollout_steps']
+            if (not isinstance(steps, list) or not steps
+                    or any(type(s) is not int or not 1 <= s <= 100 for s in steps)
+                    or steps != sorted(set(steps)) or steps[-1] != 100):
+                raise Blocked('rollout_steps must be strictly increasing integers 1..100 ending in 100')
+        if 'auto_rollback' in deploy and type(deploy['auto_rollback']) is not bool:
+            raise Blocked('auto_rollback must be a boolean')
         contained(Path('/release'), deploy.get('config', 'wrangler.jsonc'))
     contained(Path('/release'), deploy.get('cwd', '.'))
     smoke = profile.get('smoke', [])
