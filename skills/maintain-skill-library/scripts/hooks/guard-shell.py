@@ -1,10 +1,12 @@
 #!/usr/bin/python3
-"""One shell guard for Claude, Cursor, Grok, and Codex. Fail closed.
+"""One shell guard for Claude, Cursor, Grok, Codex, and Antigravity. Fail closed.
 
 The verdict comes from every simple command in the text (after ;, &&, |, $( ),
 backticks, bash -c, eval), not from the command prefix.
 deny: any mention of a secret path (except ls/test/stat/wc -c/shasum/jq keys/grep -c/
       chmod/cp -p/mv of it), env dumps, Keychain, gh token, live Stripe, force-push,
+      direct push to main/master, LEFTHOOK/LEFTHOOK_EXCLUDE bypasses, lefthook uninstall,
+      git config core.hooksPath edits,
       rm -r / find -delete / xargs rm outside $PWD, ~/Projects/<repo> build dirs, or temp dirs.
 ask:  deploys, releases, publishes, App Store uploads, merges, remote curl/gh api writes,
       git --no-verify / -n / reset --hard / push --delete / --force-with-lease off main,
@@ -12,8 +14,8 @@ ask:  deploys, releases, publishes, App Store uploads, merges, remote curl/gh ap
 Recursive search: ripgrep reads what git does not ignore and follows no symlinks, so its scope
 is judged from git's file list; grep -r, ag, ack and rg --no-ignore/-u/-L get a full name walk.
 A project's own .claude/settings.json is an ordinary file; the user-level one is a secret.
-Everything else: Claude/Codex get no output (native permissions apply);
-Cursor gets {"permission": "allow"} because its contract needs JSON.
+Everything else: Claude/Codex/Grok get no output (native permissions apply);
+Cursor gets {"permission": "allow"}; Antigravity gets {"decision": "allow"}.
 A parse or runtime error exits 2, which every client treats as a block.
 """
 import hashlib
@@ -23,6 +25,7 @@ import os
 import re
 import runpy
 import shlex
+import subprocess
 import sys
 import time
 
@@ -145,6 +148,44 @@ LEVEL = {"allow": 0, "ask": 1, "deny": 2}
 R_SECRET = "Do not read secret/credential files. Check key names in code or docs instead."
 R_ENV = "Do not print environment values, Keychain items, tokens, or use live Stripe."
 R_FORCE = "Force-push is blocked. On a branch other than main, --force-with-lease can be approved by Cohen; otherwise push a new branch."
+R_PUSH_MAIN = "Direct push to main/master is blocked. Work on a branch and use ship."
+def _git_config_read(rest: list) -> bool:
+    """True when `git config <rest>` only reads.
+
+    Reads: an explicit read flag, the `get`/`list` subcommands, or a bare key
+    with no value (`git config core.hooksPath`). Anything that sets, adds,
+    unsets, renames, edits or passes a value is a write.
+    """
+    read_flags = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l"}
+    write_flags = {"--unset", "--unset-all", "--add", "--replace-all", "--rename-section",
+                   "--remove-section", "--edit", "-e"}
+    scope_flags = {"--local", "--global", "--system", "--worktree", "--show-origin",
+                   "--show-scope", "--null", "-z", "--name-only", "--includes", "--no-includes",
+                   "--type", "--bool", "--int", "--path", "--expiry-date", "--bool-or-int"}
+    takes_value = {"--file", "-f", "--blob", "--type", "--default"}
+    words, skip = [], False
+    for a in rest:
+        if skip:
+            skip = False
+            continue
+        if a in read_flags:
+            return True
+        if a in write_flags:
+            return False
+        if a in takes_value:
+            skip = True
+            continue
+        if a.startswith("-"):
+            if a.split("=")[0] in scope_flags | takes_value:
+                continue
+            return False  # unknown flag: assume it writes
+        words.append(a)
+    if words and words[0] in ("get", "list"):
+        return True
+    return len(words) == 1 and words[0] not in ("set", "unset", "rename-section", "remove-section", "edit")
+
+
+R_HOOKS = "Disabling or changing git hooks (LEFTHOOK/LEFTHOOK_EXCLUDE, lefthook uninstall, core.hooksPath) is blocked. Fix the failure instead."
 R_RM = "Recursive delete is allowed only inside the working directory, ~/Projects/<repo> build dirs, or temp dirs."
 R_RM_ASK = "Recursive delete with an unresolved target. Wait for Cohen's approval."
 R_ASK = "Deploy, release, publish, submit, merge, remote write, or destructive git. State the exact target and wait for Cohen's approval."
@@ -856,20 +897,60 @@ def _gh_risky(args) -> bool:
             or (sub == "secret" and sub2 in ("set", "delete", "remove")))
 
 
-def _git_verdict(args):
+_GIT_ENV_STRIP = {
+    "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+}
+
+
+def _clean_git_env():
+    return {k: v for k, v in os.environ.items() if k not in _GIT_ENV_STRIP}
+
+
+def _git_default_branch(cwd) -> str:
+    if not cwd or not os.path.isdir(cwd):
+        return "main"
+    try:
+        ref = subprocess.run(
+            ["git", "symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"],
+            cwd=cwd, env=_clean_git_env(), capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        return ref.split("/", 1)[1] if "/" in ref else "main"
+    except Exception:
+        return "main"
+
+
+def _git_current_branch(cwd) -> str:
+    if not cwd or not os.path.isdir(cwd):
+        return ""
+    try:
+        return subprocess.run(
+            ["git", "symbolic-ref", "--short", "-q", "HEAD"],
+            cwd=cwd, env=_clean_git_env(), capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        return ""
+
+
+def _git_verdict(args, cwd=None):
     """Return (decision, reason) for one git command."""
-    i, cfg = 0, []
+    i, cfg, git_cwd = 0, [], cwd
     while i < len(args) and args[i].startswith("-"):
         a = args[i]
         if a in ("-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env", "--exec-path"):
             if a == "-c" and i + 1 < len(args):
                 cfg.append(args[i + 1])
+            elif a == "-C" and i + 1 < len(args):
+                git_cwd = _expand(args[i + 1], git_cwd) or git_cwd
             i += 2
             continue
         if a.startswith("-c"):
             cfg.append(a[2:])
         i += 1
     sub, rest = (args[i] if i < len(args) else ""), args[i + 1:]
+    if sub == "config":
+        if any("core.hookspath" in a.lower() for a in rest) and not _git_config_read(rest):
+            return "deny", R_HOOKS
     if sub == "push":
         level, pos, j, lease, wide = "allow", [], 0, False, False
         while j < len(rest):
@@ -910,6 +991,15 @@ def _git_verdict(args):
             level = "ask"
         if any(r.startswith(":") for r in pos):
             level = "ask"
+        protected = {_git_default_branch(git_cwd).lower(), "main", "master"}
+        push_refs = [r for r in pos[1:] if not r.startswith(":")]
+        if push_refs:
+            targets = [re.sub(r"^refs/heads/", "", r.split(":")[-1]).lower() for r in push_refs]
+            if any(t in protected for t in targets):
+                return "deny", R_PUSH_MAIN
+        elif not wide and level == "allow":
+            if _git_current_branch(git_cwd).lower() in protected:
+                return "deny", R_PUSH_MAIN
         if level == "ask":
             return "ask", R_ASK
     if any(re.search(r"core\.hookspath", c, re.I) for c in cfg) or "--no-verify" in rest:
@@ -1097,7 +1187,9 @@ def analyze(text: str, cwd, depth=0, in_subst=False) -> Verdict:
         elif rm == "ask":
             v.add("ask", R_RM_ASK)
         if name == "git":
-            v.add(*_git_verdict(args))
+            v.add(*_git_verdict(args, cwd))
+        elif name == "lefthook" and any(a == "uninstall" for a in args if not a.startswith("-")):
+            v.add("deny", R_HOOKS)
         elif _ask_command(name, argv0, args):
             v.add("ask", R_ASK)
         for nested in _nested(name, args):
@@ -1106,6 +1198,11 @@ def analyze(text: str, cwd, depth=0, in_subst=False) -> Verdict:
 
 
 def _command(data: dict) -> str:
+    tc = data.get("toolCall")
+    if isinstance(tc, dict):
+        args = tc.get("args") or {}
+        if isinstance(args, dict):
+            return str(args.get("CommandLine") or args.get("command") or "")
     tool_input = data.get("toolInput") or data.get("tool_input") or {}
     if not isinstance(tool_input, dict):
         tool_input = {}
@@ -1155,6 +1252,8 @@ def decide(cmd: str, cwd: str = ""):
         return "deny", R_SECRET
     if any(re.search(p, shell, re.I) for p in SECRET_COMMANDS):
         return "deny", R_ENV
+    if re.search(r"\bLEFTHOOK(_EXCLUDE)?=", shell):
+        return "deny", R_HOOKS
     v = analyze(shell, cwd or None)
     if v.decision != "deny" and any(re.search(p, shell, re.I) for p in ASK):
         v.add("ask", R_ASK)
@@ -1193,9 +1292,11 @@ def decide_code(code: str, cwd: str = ""):
 
 FILE_TOOLS = {
     "apply_patch", "Edit", "Write", "MultiEdit",
-    "write", "search_replace", "StrReplace",
+    "write", "search_replace", "StrReplace", "Delete",
+    "edit_file", "write_file", "replace_file_content",
+    "multi_replace_file_content", "write_to_file",
 }
-PATH_KEYS = ("file_path", "filePath", "path", "file", "target_file")
+PATH_KEYS = ("file_path", "filePath", "path", "file", "target_file", "Path", "TargetFile", "AbsolutePath")
 R_TRUNCATED = "Tool input was truncated, so the guard cannot see the whole call."
 
 
@@ -1214,8 +1315,13 @@ def route(data: dict):
         return "deny", R_TRUNCATED
     global _COMMAND
     _COMMAND = ""
-    tool = str(data.get("tool_name") or data.get("toolName") or "")
-    ti = data.get("toolInput") or data.get("tool_input") or {}
+    tc = data.get("toolCall")
+    if isinstance(tc, dict):
+        tool = str(tc.get("name") or "")
+        ti = tc.get("args") or {}
+    else:
+        tool = str(data.get("tool_name") or data.get("toolName") or "")
+        ti = data.get("toolInput") or data.get("tool_input") or {}
     if not isinstance(ti, dict):
         ti = {}
     cwd = str(data.get("cwd") or "")
@@ -1241,9 +1347,16 @@ def main() -> None:
     except Exception as exc:  # fail closed
         sys.stderr.write("guard-shell: blocked, hook error: %s\n" % exc.__class__.__name__)
         sys.exit(2)
-    # PascalCase events use the Claude/Codex contract. Codex also sends model
+    # Antigravity sends camelCase hookEventName + toolCall and expects {"decision": ..., "reason": ...}.
+    if isinstance(data.get("toolCall"), dict) and data.get("hookEventName") == "PreToolUse":
+        payload = {"decision": decision}
+        if decision != "allow":
+            payload["reason"] = reason
+        print(json.dumps(payload))
+        return
+    # PascalCase events use the Claude/Codex/Grok contract. Codex also sends model
     # and rejects "ask", so it gets "deny" with the same reason.
-    if data.get("hook_event_name") == "PreToolUse":
+    if data.get("hook_event_name") == "PreToolUse" or data.get("hookEventName") == "PreToolUse":
         if decision == "allow":
             return  # no output: native permissions apply
         if decision == "ask" and "model" in data:

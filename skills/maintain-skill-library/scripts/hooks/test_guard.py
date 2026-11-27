@@ -522,10 +522,77 @@ class GuardContract(unittest.TestCase):
             ("guard-shell.py", {"toolName": "search_replace", "toolInput": {"file_path": ".env", "old_string": "a", "new_string": "b"}}, "deny"),
             ("guard-shell.py", {"toolName": "run_terminal_command", "toolInput": {"command": "git status"}, "toolInputTruncated": True}, "deny"),
         ]
-        for hook, body, expect in cases:
-            data = {"hook_event_name": "PreToolUse", "cwd": CWD, **body}
-            with self.subTest(hook=hook, tool=body["toolName"], expect=expect):
-                self.check(hook, "claude", data, expect)
+        for event_key in ("hook_event_name", "hookEventName"):
+            for hook, body, expect in cases:
+                data = {event_key: "PreToolUse", "cwd": CWD, **body}
+                with self.subTest(event_key=event_key, hook=hook, tool=body["toolName"], expect=expect):
+                    self.check(hook, "claude", data, expect)
+
+    def test_ci_guard_rules_migrated_into_guard_shell(self):
+        self.matrix([
+            "LEFTHOOK=0 git commit -m x",
+            "LEFTHOOK_EXCLUDE=gitleaks git push origin feat",
+            "export LEFTHOOK=0",
+            "lefthook uninstall",
+            "git config core.hooksPath /dev/null",
+            "git config --global core.hooksPath /tmp/h",
+            "git config --unset core.hooksPath",
+            "git config --unset-all core.hooksPath",
+            "git config --add core.hooksPath /tmp/h",
+            "git config set core.hooksPath /tmp/h",
+            "git config unset core.hooksPath",
+            "git config --local --replace-all core.hooksPath /tmp/h",
+            "git push origin main",
+            "git push origin master",
+            "git push origin HEAD:main",
+            "git push origin refs/heads/main",
+        ], "deny")
+        self.matrix([
+            "git config --get core.hooksPath",
+            # A bare key with no value is a read; refusing it blocked hook audits.
+            "git config core.hooksPath",
+            "git config --local core.hooksPath",
+            "git -C repo config core.hooksPath",
+            "git config get core.hooksPath",
+            "hp=$(git config core.hooksPath); echo $hp",
+            "git push -u origin feat",
+        ], "allow")
+        with tempfile.TemporaryDirectory() as tmp:
+            clean_env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+            subprocess.run(["git", "-C", tmp, "init", "-q", "-b", "main"], env=clean_env, check=True)
+            data = shell_input("claude", "git push")
+            data["cwd"] = tmp
+            self.check("guard-shell.py", "claude", data, "deny")
+            subprocess.run(["git", "-C", tmp, "checkout", "-qb", "feat"], env=clean_env, check=True)
+            self.check("guard-shell.py", "claude", data, "allow")
+
+    def test_antigravity_contract(self):
+        secret = HOME + "/.agents/mcp.env"
+        cases = [
+            ("guard-shell.py", "run_command", {"CommandLine": "git push --force origin main"}, "deny"),
+            ("guard-shell.py", "run_command", {"CommandLine": "ls"}, "allow"),
+            ("guard-shell.py", "run_command", {"CommandLine": "wrangler deploy"}, "ask"),
+            ("guard-shell.py", "edit_file", {"Path": secret}, "deny"),
+            ("guard-shell.py", "write_file", {"Path": "src/app.ts"}, "allow"),
+            ("deny-env-read.py", "read_file", {"Path": secret}, "deny"),
+            ("deny-env-read.py", "read_file", {"Path": "README.md"}, "allow"),
+            ("deny-env-read.py", "grep_search", {"SearchPath": HOME, "Query": "TOKEN"}, "deny"),
+        ]
+        for hook, tool, args, expect in cases:
+            payload = {
+                "hookEventName": "PreToolUse",
+                "cwd": CWD,
+                "toolCall": {"id": "toolu_1", "name": tool, "args": args},
+            }
+            with self.subTest(hook=hook, tool=tool, expect=expect):
+                r = run(hook, payload)
+                self.assertEqual(r.returncode, 0, r.stderr)
+                out = json.loads(r.stdout)
+                self.assertEqual(out.get("decision"), expect)
+                if expect == "allow":
+                    self.assertEqual(out, {"decision": "allow"})
+                else:
+                    self.assertTrue(out.get("reason"))
 
     def test_read_tool(self):
         for client in ("claude", "codex", "cursor"):
