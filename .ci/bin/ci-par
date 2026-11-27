@@ -4,6 +4,9 @@
 # timing table. On failure: the failing log tail, the first error line it can
 # find (file:line when there is one) and the exact rerun command.
 # --pre recipes run first, one at a time (dependency installs).
+# A stage that exits 0 after printing `ci-skip: <reason>` is marked skipped.
+# A stage whose status file is missing or malformed fails (fail closed).
+# Runs under macOS /bin/bash 3.2: no EPOCHREALTIME, no empty "${a[@]}" under set -u.
 set -uo pipefail
 
 pre=()
@@ -13,31 +16,37 @@ if [[ "${1:-}" == "--pre" ]]; then
 fi
 [[ $# -gt 0 ]] || { echo "usage: ci-par [--pre a,b] recipe..." >&2; exit 2; }
 
-logs="$(mktemp -d "${TMPDIR:-/tmp}/ci-par.XXXXXX")"
+logs="$(mktemp -d "${TMPDIR:-/tmp}/ci-par.XXXXXX")" || exit 1
 trap 'rm -rf "$logs"' EXIT
-start=$EPOCHREALTIME
+: >"$logs/started" || exit 1
+# EPOCHREALTIME is bash 5; macOS /bin/bash 3.2 (hooks from GUI apps, minimal PATHs)
+# falls back to whole seconds. A comma decimal (some locales) would break bc.
+now() { if [[ -n "${EPOCHREALTIME:-}" ]]; then echo "${EPOCHREALTIME/,/.}"; else date +%s; fi; }
+start=$(now)
 
 table=""
-for r in "${pre[@]}"; do
-  s=$EPOCHREALTIME
+for r in ${pre[@]+"${pre[@]}"}; do
+  s=$(now)
   if ! just "$r" >"$logs/pre-$r.log" 2>&1; then
     echo "----- $r (last 40 lines) -----" >&2
     tail -n 40 "$logs/pre-$r.log" >&2
     echo "rerun: just $r" >&2
     exit 1
   fi
-  table+="$(printf 'ok    %-22s %6.1fs  (first, alone)' "$r" "$(bc <<<"$EPOCHREALTIME - $s")")"$'\n'
+  table+="$(LC_ALL=C printf 'ok    %-22s %6.1fs  (first, alone)' "$r" "$(bc <<<"$(now) - $s")")"$'\n'
 done
 
+pids=()
 for r in "$@"; do
   (
-    s=$EPOCHREALTIME
+    s=$(now)
     just "$r" >"$logs/$r.log" 2>&1
     rc=$?
-    printf '%s %.1f\n' "$rc" "$(bc <<<"$EPOCHREALTIME - $s")" >"$logs/$r.rc"
+    elapsed="$(bc <<<"$(now) - $s")" || exit 1
+    LC_ALL=C printf '%s %.1f\n' "$rc" "$elapsed" >"$logs/$r.rc"
   ) &
+  pids+=("$!")
 done
-wait
 
 first_error() {
   # file:line first, then the usual failure words.
@@ -47,28 +56,43 @@ first_error() {
 }
 
 fail=0
+stage=0
+failures=()
 for r in "$@"; do
-  read -r rc secs <"$logs/$r.rc"
+  status_file="$logs/$r.rc"
+  error=""
+  if wait "${pids[stage]}" && [[ -f "$status_file" && ! -L "$status_file" && ! "$status_file" -ot "$logs/started" ]] \
+    && IFS= read -r status <"$status_file" \
+    && [[ "$status" =~ ^(0|[1-9][0-9]{0,2})\ ([0-9]+\.[0-9])$ ]] \
+    && (( BASH_REMATCH[1] <= 255 )) && cmp -s "$status_file" <(printf '%s\n' "$status"); then
+    rc="${BASH_REMATCH[1]}" secs="${BASH_REMATCH[2]}s"
+  else
+    rc=1 secs="?"
+    error="could not write or read a valid stage status for this run"
+  fi
+  stage=$((stage + 1))
   if [[ "$rc" == 0 ]]; then
-    # ci-scope skipped a step the diff cannot reach: say so, a skip is not a pass.
-    note=""; grep -q '^ci-scope: skip' "$logs/$r.log" && note="  (skipped: diff out of scope)"
-    table+="$(printf 'ok    %-22s %6ss%s' "$r" "$secs" "$note")"$'\n'
+    # ci-scope / ci-skip skipped a step: surface the reason in the table, a skip is not a silent pass.
+    note=""
+    if grep -q '^ci-scope: skip' "$logs/$r.log"; then
+      note="  (skipped: diff out of scope)"
+    elif skip_line="$(grep -m1 '^ci-skip: ' "$logs/$r.log")"; then
+      note="  (skipped: ${skip_line#ci-skip: })"
+    fi
+    table+="$(printf 'ok    %-22s %7s%s' "$r" "$secs" "$note")"$'\n'
   else
     fail=1
-    table+="$(printf 'FAIL  %-22s %6ss' "$r" "$secs")"$'\n'
+    table+="$(printf 'FAIL  %-22s %7s' "$r" "$secs")"$'\n'
+    echo "----- $r (last 40 lines) -----" >&2
+    tail -n 40 "$logs/$r.log" >&2
+    error="${error:-$(first_error "$logs/$r.log")}"
+    echo "first error: $error" >&2
+    echo "rerun: just $r" >&2
+    failures+=("- **$r**: $error — rerun \`just $r\`")
   fi
 done
 
-for r in "$@"; do
-  read -r rc _ <"$logs/$r.rc"
-  [[ "$rc" == 0 ]] && continue
-  echo "----- $r (last 40 lines) -----" >&2
-  tail -n 40 "$logs/$r.log" >&2
-  echo "first error: $(first_error "$logs/$r.log")" >&2
-  echo "rerun: just $r" >&2
-done
-
-total="$(printf '%.1f' "$(bc <<<"$EPOCHREALTIME - $start")")"
+total="$(LC_ALL=C printf '%.1f' "$(bc <<<"$(now) - $start")")"
 printf '%stotal %ss\n' "$table" "$total"
 
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
@@ -76,9 +100,8 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo '```'
     printf '%stotal %ss\n' "$table" "$total"
     echo '```'
-    for r in "$@"; do
-      read -r rc _ <"$logs/$r.rc"
-      [[ "$rc" == 0 ]] || echo "- **$r**: \`$(first_error "$logs/$r.log")\` — rerun \`just $r\`"
+    for line in ${failures[@]+"${failures[@]}"}; do
+      printf '%s\n' "$line"
     done
   } >>"$GITHUB_STEP_SUMMARY"
 fi

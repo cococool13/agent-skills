@@ -15,7 +15,13 @@ if ! base="$(git merge-base "$default" HEAD 2>/dev/null)"; then
   exec gitleaks git --no-banner --redact .
 fi
 if [[ "$base" == "$(git rev-parse HEAD)" ]]; then
-  echo "ci-gitleaks: no commits beyond $default"
+  if ! git diff --cached --quiet; then
+    exec gitleaks git --staged --no-banner --redact .
+  fi
+  echo "ci-skip: no commits beyond $default and nothing staged"
   exit 0
 fi
-exec gitleaks git --no-banner --redact --log-opts="$base..HEAD" .
+gitleaks git --no-banner --redact --log-opts="$base..HEAD" .
+if ! git diff --cached --quiet; then
+  gitleaks git --staged --no-banner --redact .
+fi
