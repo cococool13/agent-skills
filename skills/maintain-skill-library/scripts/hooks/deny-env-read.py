@@ -253,11 +253,15 @@ def unsafe_search_scope(path: str, cwd: str, respect_ignore: bool = False,
     return _walk_unsafe(scope, follow_links)
 
 
-SEARCH_TOOLS = {"grep", "search", "grep_search"}  # ripgrep-backed in Claude and Grok
+SEARCH_TOOLS = {"grep", "search", "grep_search", "find_by_name"}  # ripgrep-backed in Claude, Grok, and Antigravity
 
 
 def _tool_input(data: dict) -> dict:
-    raw = data.get("toolInput", data.get("tool_input", {}))
+    tc = data.get("toolCall")
+    if isinstance(tc, dict):
+        raw = tc.get("args", {})
+    else:
+        raw = data.get("toolInput", data.get("tool_input", {}))
     if not isinstance(raw, dict):
         raise ValueError("tool input is not an object")
     return raw
@@ -265,7 +269,8 @@ def _tool_input(data: dict) -> dict:
 
 def _path(data: dict) -> str:
     tool_input = _tool_input(data)
-    for key in ("filePath", "file_path", "path", "file", "target_file"):
+    for key in ("filePath", "file_path", "path", "file", "target_file",
+                "Path", "AbsolutePath", "SearchPath", "SearchDirectory"):
         value = data.get(key) or tool_input.get(key)
         if value:
             if not isinstance(value, str):
@@ -274,8 +279,14 @@ def _path(data: dict) -> str:
     return ""
 
 
-def _emit(payload: dict, structured: bool = False) -> None:
+def _emit(payload: dict, structured: bool = False, antigravity: bool = False) -> None:
     decision = payload.get("decision") or payload.get("permission")
+    if antigravity:
+        output = {"decision": decision}
+        if decision != "allow":
+            output["reason"] = payload.get("reason", "")
+        print(json.dumps(output))
+        return
     if structured:
         output = {"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
@@ -298,7 +309,10 @@ def main() -> None:
         sys.stderr.write("deny-env-read: blocked, hook error: %s\n" % exc.__class__.__name__)
         sys.exit(2)
 
-    structured = data.get("hook_event_name") == "PreToolUse"
+    antigravity = isinstance(data.get("toolCall"), dict) and data.get("hookEventName") == "PreToolUse"
+    structured = data.get("hook_event_name") == "PreToolUse" or (
+        data.get("hookEventName") == "PreToolUse" and not antigravity
+    )
     if data.get("toolInputTruncated") is True or data.get("tool_input_truncated") is True:
         reason = "Tool input was truncated, so the guard cannot see the whole path."
         _emit(
@@ -310,10 +324,12 @@ def main() -> None:
                 "agent_message": reason,
             },
             structured=structured,
+            antigravity=antigravity,
         )
         return
 
-    tool = str(data.get("tool_name") or data.get("toolName") or "").lower()
+    tc = data.get("toolCall") if antigravity else None
+    tool = str((tc.get("name") if isinstance(tc, dict) else None) or data.get("tool_name") or data.get("toolName") or "").lower()
     try:
         path = _path(data)
         if not path and tool not in SEARCH_TOOLS:
@@ -331,7 +347,7 @@ def main() -> None:
     reason = "Do not read secret/credential files. Check key names only, never values."
     if not deny and tool in SEARCH_TOOLS:
         tool_input = _tool_input(data)
-        globs = [str(tool_input[key]) for key in ("glob", "include") if tool_input.get(key)]
+        globs = [str(tool_input[key]) for key in ("glob", "include", "Includes") if tool_input.get(key)]
         if unsafe_search_scope(path, cwd, respect_ignore=True, globs=globs):
             deny, reason = True, SCOPE_REASON
     if deny:
@@ -344,9 +360,10 @@ def main() -> None:
                 "agent_message": reason,
             },
             structured=structured,
+            antigravity=antigravity,
         )
     else:
-        _emit({"permission": "allow", "decision": "allow"}, structured=structured)
+        _emit({"permission": "allow", "decision": "allow"}, structured=structured, antigravity=antigravity)
 
 
 if __name__ == "__main__":
