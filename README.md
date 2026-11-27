@@ -8,6 +8,15 @@ Install a workflow for the job you’re doing in Cursor or another coding agent.
 npx skills add cococool13/agent-skills
 ```
 
+Install one skill, or several, by name:
+
+```sh
+npx skills add cococool13/agent-skills --skill <name>
+npx skills add cococool13/agent-skills --skill <name> <name>
+```
+
+`--list` shows every skill in the repo without installing. Add `-g` to install for your user instead of the current project, and `-a <agent>` to pick the agent. The skills CLI has no packs; name each skill with `--skill`.
+
 Choose the skills and agents you use. Review any example paths before running a skill. Keep personal defaults in your own `~/.agents/AGENTS.md`.
 
 ## All skills

@@ -1,6 +1,10 @@
 ---
 name: mobbin-design
 description: "Use when researching or designing UI from real app and website references before implementing."
+when: "Researching real app and website UI before designing"
+category: design
+level: beginner
+setup: "2 min; the Mobbin MCP and a Mobbin sign-in"
 ---
 # Mobbin Design
 

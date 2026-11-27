@@ -3,6 +3,10 @@ name: mac-app-upgrade
 description: "Use when auditing or hardening an existing Mac app (SwiftUI, AppKit, menu bar): concurrency, persistence, TCC, signing, Sparkle. Report-only by default. Do not use for iPhone apps or notarizing."
 argument-hint: "[path or area] [--report-only | --implement] [--quick | --standard | --deep]"
 compatibility: "Works from a local Mac app checkout with a shell and the project's own toolchain. Portable markdown for Claude Code, Codex, and similar agents. Optional companion skills are used only if already installed."
+when: "Auditing or hardening an existing Mac app"
+category: audit
+level: advanced
+setup: "none; a local Mac app checkout and its toolchain"
 ---
 
 # Mac app upgrade

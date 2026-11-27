@@ -1,6 +1,10 @@
 ---
 name: canvas
 description: Use when creating or editing a .canvas.tsx artifact or choosing an interactive artifact format. Route to the active client's supported runtime.
+when: "Making or editing a .canvas.tsx or choosing an artifact format"
+category: design
+level: beginner
+setup: "none"
 ---
 
 # Canvas routing

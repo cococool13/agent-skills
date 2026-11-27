@@ -2,6 +2,10 @@
 name: launch-qa-five-personas
 description: "Use before a web launch or big landing-page change: five first-time-visitor agents test the deployed or preview site in a browser and return ranked findings with pass/fail."
 argument-hint: "<live or preview URL> [success goal]"
+when: "Before a web launch or a big landing-page change"
+category: audit
+level: intermediate
+setup: "none; a live or preview URL and a browser tool"
 ---
 
 # Launch QA: five first-time visitors

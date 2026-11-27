@@ -6,6 +6,10 @@ user-invocable: true
 argument-hint: "[note]"
 metadata:
   short-description: "Unify this repo on main and release autonomously"
+when: "Committing, merging, pushing and deploying a finished repo"
+category: ship
+level: advanced
+setup: "none; a git repo with a remote"
 ---
 
 # Ship

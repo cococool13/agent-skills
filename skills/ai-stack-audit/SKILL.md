@@ -1,6 +1,10 @@
 ---
 name: ai-stack-audit
 description: "Use when Cohen asks to audit or improve AI agent instructions, skills, hooks, MCP setup, permissions, or cross-client configuration."
+when: "Auditing or fixing agent instructions, skills, hooks or MCP setup"
+category: setup
+level: advanced
+setup: "none"
 ---
 
 # AI stack audit

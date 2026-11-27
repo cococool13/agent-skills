@@ -3,6 +3,10 @@ name: repo-upgrade
 description: "Use when asked to fix a whole repo end to end (bugs, security, speed, dead code, CI, agent-proofing) and ship one draft PR, or /repo-upgrade. For a report-only iOS, Mac or web audit use the *-upgrade skill."
 argument-hint: "[path or area] [--audit-only] [--quick | --deep] [--no-security]"
 license: MIT
+when: "Fixing a whole repo end to end and shipping one draft PR"
+category: code
+level: advanced
+setup: "none; a local repo checkout"
 ---
 
 # Repo upgrade

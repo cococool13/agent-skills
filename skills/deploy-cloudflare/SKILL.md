@@ -1,6 +1,10 @@
 ---
 name: deploy-cloudflare
 description: "Use when deploying Cohen's sites to Cloudflare Pages or Workers."
+when: "Deploying a site to Cloudflare Pages or Workers"
+category: ship
+level: intermediate
+setup: "5 min; a Cloudflare account with Wrangler login or the Cloudflare MCP"
 ---
 
 # Deploy to Cloudflare
