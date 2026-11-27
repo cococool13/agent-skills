@@ -1,6 +1,6 @@
 #!/bin/sh
 # The skills-ci gate: `just check` (which lefthook pre-push runs) runs this, so
-# add checks here and not in a caller. test_guard.py takes about a minute and
+# add checks here and not in a caller. test_guard.py takes about 10 s and
 # needs HOME outside temp roots (the guard treats temp paths as safe).
 set -eu
 cd "$(git rev-parse --show-toplevel)"

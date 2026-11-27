@@ -35,11 +35,12 @@ hook-selftests:
     /usr/bin/python3 skills/maintain-skill-library/scripts/hooks/lint-dirty.py --selftest
 
 # AGENTS.md "Commands".
+# Each test makes its own temp repos, so tests run spread across processes (scripts/unittest-par.py).
 ship-tests:
-    python3 -m unittest discover -s skills/ship/scripts -p 'test_*.py'
+    python3 scripts/unittest-par.py skills/ship/scripts test_ship.py test_ship_all.py
 
 library-tests:
-    python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_*.py'
+    python3 scripts/unittest-par.py skills/maintain-skill-library/scripts 'test_*.py'
 
 # Commits this branch adds, with the repo's .gitleaks.toml.
 gitleaks:
