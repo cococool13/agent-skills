@@ -341,6 +341,65 @@ class ProviderTests(GitFixture):
         self.assertTrue(journal.data['version_probe']['verified'])
         self.assertEqual(journal.data['previous_deployment']['versions'][0]['version_id'], 'old-version')
 
+    def test_cloudflare_gradual_rollout_10_then_100(self):
+        journal = self.journal()
+        journal.save(artifacts={})
+        calls = []
+        config = {'mode': 'cloudflare', 'name': 'fixture', 'environment': 'production',
+                  'account': 'fixture-account', 'identity_url': 'https://example.invalid/release',
+                  'probe': ['probe', '{sha}', '{version}'], 'wrangler': ['wrangler'],
+                  'rollout_steps': [10, 100], 'health_url': 'https://example.invalid/health'}
+        promoted = []
+        def query(argv, cwd, account=''):
+            if argv[0] == 'probe':
+                return {'sha': journal.data['sha'], 'version': 'new-version', 'verified': True}
+            if argv[1:3] == ['versions', 'list']:
+                return [{'id': 'new-version', 'annotations': {'workers/tag': 'fixture'}}]
+            return [{'id': 'deployment', 'created_on': '2026-10-26', 'versions': [
+                {'version_id': 'new-version' if promoted else 'old-version', 'percentage': 100}]}]
+        def command(argv, cwd, timeout=60, account=''):
+            calls.append(argv)
+            if argv[1:3] == ['versions', 'deploy'] and 'new-version@100%' in argv:
+                promoted.append(True)
+            return subprocess.CompletedProcess(argv, 0)
+        with patch('ship_release.read_json', side_effect=query), patch('ship_release.capture', side_effect=command), \
+                patch('ship_release.http_check', return_value={'passed': True}) as http_mock:
+            cloudflare(self.repo, config, {}, journal)
+        deploy_calls = [c for c in calls if c[1:3] == ['versions', 'deploy']]
+        self.assertEqual(len(deploy_calls), 2)
+        self.assertIn('old-version@90%', deploy_calls[0])
+        self.assertIn('new-version@10%', deploy_calls[0])
+        self.assertIn('new-version@100%', deploy_calls[1])
+        self.assertEqual(http_mock.call_count, 2)
+
+    def test_cloudflare_gradual_rollout_auto_rollbacks_on_health_failure(self):
+        journal = self.journal()
+        journal.save(artifacts={})
+        calls = []
+        config = {'mode': 'cloudflare', 'name': 'fixture', 'environment': 'production',
+                  'account': 'fixture-account', 'identity_url': 'https://example.invalid/release',
+                  'probe': ['probe', '{sha}', '{version}'], 'wrangler': ['wrangler'],
+                  'rollout_steps': [10, 100], 'health_url': 'https://example.invalid/health'}
+        def query(argv, cwd, account=''):
+            if argv[0] == 'probe':
+                return {'sha': journal.data['sha'], 'version': 'new-version', 'verified': True}
+            if argv[1:3] == ['versions', 'list']:
+                return [{'id': 'new-version', 'annotations': {'workers/tag': 'fixture'}}]
+            return [{'id': 'deployment', 'created_on': '2026-10-26', 'versions': [
+                {'version_id': 'old-version', 'percentage': 100}]}]
+        def command(argv, cwd, timeout=60, account=''):
+            calls.append(argv)
+            return subprocess.CompletedProcess(argv, 0)
+        with patch('ship_release.read_json', side_effect=query), patch('ship_release.capture', side_effect=command), \
+                patch('ship_release.http_check', side_effect=Blocked('500 from health')), self.assertRaises(Blocked) as ctx:
+            cloudflare(self.repo, config, {}, journal)
+        self.assertIn('rolled back', str(ctx.exception))
+        deploy_calls = [c for c in calls if c[1:3] == ['versions', 'deploy']]
+        self.assertEqual(len(deploy_calls), 2)
+        self.assertIn('new-version@10%', deploy_calls[0])
+        self.assertIn('old-version@100%', deploy_calls[1])
+        self.assertTrue(journal.data['rollback']['succeeded'])
+
     def test_bad_uploaded_version_probe_blocks_promotion(self):
         journal = self.journal()
         journal.save(artifacts={}, version_id='new-version')
