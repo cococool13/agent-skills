@@ -193,18 +193,61 @@ def cloudflare(checkout: Path, config: dict, profile: dict, journal: Journal):
     journal.save(version_probe={'sha': probe['sha'], 'version': version, 'verified': True})
     current = active()
     journal.save(active_deployment={'id': current.get('id'), 'versions': current.get('versions', [])})
+    steps = config.get('rollout_steps') or [100]
+    auto_rollback = config.get('auto_rollback', len(steps) > 1)
+    prev_versions = journal.data.get('previous_deployment', {}).get('versions', [])
+    prev_id = prev_versions[0].get('version_id') if len(prev_versions) == 1 else ''
+
+    def rollback_to_previous(reason: str):
+        if not auto_rollback:
+            raise Blocked(reason)
+        rb_argv = ([*base, 'rollback', *flags, '--yes']
+                   if not prev_id else [*base, 'versions', 'deploy', prev_id + '@100%', *flags, '--yes'])
+        rb_res = capture(rb_argv, cwd, config.get('timeout', 1800), account)
+        journal.save(rollback={'reason': reason, 'previous_version': prev_id, 'succeeded': rb_res.returncode == 0})
+        if rb_res.returncode != 0:
+            raise Blocked(f'{reason}; automatic rollback also failed — inspect Cloudflare deployments immediately')
+        raise Blocked(f'{reason}; automatically rolled back to previous version')
+
+    def check_step_health(pct: int):
+        if config.get('health_url'):
+            http_check(config['health_url'], journal.data['sha'], version,
+                       config.get('health_contains', ''), config.get('health_status', 200))
+        if config.get('health_cmd'):
+            res = read_json(substitute(config['health_cmd'], journal), cwd, account)
+            if not isinstance(res, dict) or res.get('ok') is not True:
+                raise Blocked(f'health check failed at {pct}% rollout')
+
     matches = any(v.get('version_id') == version and v.get('percentage') == 100 for v in current.get('versions', []))
     if matches:
         journal.done('promote', version=version, deployment=current.get('id'))
     else:
-        external('promote', [*base, 'versions', 'deploy', version + '@100%', *flags, '--yes'],
-                 cwd, journal, config.get('timeout', 1800), account)
-        current = active()
-        if not any(v.get('version_id') == version and v.get('percentage') == 100 for v in current.get('versions', [])):
-            raise Blocked('Cloudflare active version does not match the promoted version')
-        journal.save(active_deployment={'id': current.get('id'), 'versions': current.get('versions', [])})
+        for pct in steps:
+            if pct < 100:
+                if not prev_id:
+                    continue
+                op_name = f'rollout-{pct}'
+                spec = [f'{prev_id}@{100 - pct}%', f'{version}@{pct}%']
+                external(op_name, [*base, 'versions', 'deploy', *spec, *flags, '--yes'],
+                         cwd, journal, config.get('timeout', 1800), account)
+                try:
+                    check_step_health(pct)
+                except Blocked as exc:
+                    rollback_to_previous(f'canary health check failed at {pct}% ({exc})')
+            else:
+                external('promote', [*base, 'versions', 'deploy', version + '@100%', *flags, '--yes'],
+                         cwd, journal, config.get('timeout', 1800), account)
+                current = active()
+                if not any(v.get('version_id') == version and v.get('percentage') == 100 for v in current.get('versions', [])):
+                    raise Blocked('Cloudflare active version does not match the promoted version')
+                journal.save(active_deployment={'id': current.get('id'), 'versions': current.get('versions', [])})
     # Identity probes are read-only. They do not replace a user-flow browser check.
-    journal.save(live_identity=http_check(config['identity_url'], journal.data['sha'], version, identity=True))
+    try:
+        journal.save(live_identity=http_check(config['identity_url'], journal.data['sha'], version, identity=True))
+    except Blocked as exc:
+        if auto_rollback and not matches:
+            rollback_to_previous(f'post-promotion live identity check failed ({exc})')
+        raise
 
 
 def finish(checkout: Path, profile: dict, journal: Journal):
