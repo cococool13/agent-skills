@@ -1,6 +1,10 @@
 ---
 name: new-build-recipe
 description: "Use when starting a new product or app build from scratch, or rebuilding one in a new repo: study a reference, pick design refs, build, add guardrails."
+when: "Starting a new product or app build from scratch"
+category: code
+level: advanced
+setup: "none; uses other skills and MCPs when installed"
 ---
 
 # New build recipe

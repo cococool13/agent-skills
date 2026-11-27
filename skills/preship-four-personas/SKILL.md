@@ -1,6 +1,10 @@
 ---
 name: preship-four-personas
 description: "Use before shipping customer-facing copy or pages (landing, pricing, App Store, launch email): Customer, Competitor, Skeptic and Conversion review of messaging. Pairs with launch-qa-five-personas."
+when: "Before shipping customer-facing copy or pages"
+category: writing
+level: beginner
+setup: "none"
 ---
 
 # Pre-ship 4-persona review

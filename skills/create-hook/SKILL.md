@@ -1,6 +1,10 @@
 ---
 name: create-hook
 description: "Use when creating or repairing lifecycle hooks for Codex, Cursor, Claude Code, or Grok."
+when: "Adding or repairing a lifecycle hook in Codex, Cursor, Claude Code or Grok"
+category: setup
+level: intermediate
+setup: "none"
 ---
 
 # Create or repair hooks

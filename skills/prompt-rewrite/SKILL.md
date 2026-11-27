@@ -4,6 +4,10 @@ description: >-
   Rewrites a prompt or rough task idea into a better, paste-ready prompt for a
   coding agent or AI model (text, video, speech), keeping the author's wording
   and intent. Never does the task inside it.
+when: "Turning a rough prompt or idea into a paste-ready prompt"
+category: writing
+level: beginner
+setup: "none"
 ---
 # Prompt rewrite
 

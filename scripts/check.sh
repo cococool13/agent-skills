@@ -17,6 +17,10 @@ for f in overlays/descriptions/*.txt; do
   [ "$(wc -l <"$f" | tr -d ' ')" = 1 ] && [ ${#line} -le 220 ] && [ "${line#Use}" != "$line" ] || { echo "bad overlay: $f"; exit 1; }
 done
 
+echo '== Catalog metadata (skill when/category/level/setup, catalog/third-party.yaml)'
+python3 scripts/check_catalog.py
+python3 -m unittest discover -s scripts -p 'test_check_catalog.py'
+
 echo '== Audit tests'
 python3 -m unittest discover -s skills/maintain-skill-library/scripts -p 'test_context_audit.py'
 

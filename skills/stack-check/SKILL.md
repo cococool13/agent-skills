@@ -1,6 +1,10 @@
 ---
 name: stack-check
 description: Use when checking that Stripe, RevenueCat, PostHog and App Store Connect agree on a product's plans, prices, entitlements and events. Read-only.
+when: "Checking that Stripe, RevenueCat, PostHog and App Store Connect agree"
+category: audit
+level: intermediate
+setup: "10 min; read access to Stripe, RevenueCat, PostHog and App Store Connect"
 ---
 
 # Stack check

@@ -3,6 +3,10 @@ name: app-upgrade
 description: "Use when auditing or hardening an existing iOS app: journeys, state machines, StoreKit, security, design, perf. Report-only by default. Do not use for Mac apps, websites, or repo-wide fix-and-PR runs (repo-upgrade)."
 argument-hint: "[path or area] [--report-only | --implement] [--quick | --standard | --deep]"
 compatibility: "Works from a local repo checkout with a shell and the project's own toolchain. Portable markdown for Claude Code, Codex, and similar agents. Optional companion skills are used only if already installed."
+when: "Auditing or hardening an existing iPhone app"
+category: audit
+level: advanced
+setup: "none; a local iOS app checkout and its toolchain"
 ---
 
 # App upgrade

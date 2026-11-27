@@ -3,6 +3,10 @@ name: website-upgrade
 description: "Use when auditing or hardening an existing website, web app, or Worker/API: journeys, conversion, a11y, perf, SEO, headers. Report-only by default. Do not use for iOS or Mac apps, new sites, or deploys."
 argument-hint: "[path or area] [--report-only | --implement] [--quick | --standard | --deep]"
 compatibility: "Works from a local checkout with a shell and the project's own toolchain. Portable markdown for Claude Code, Codex, and similar agents. Optional companion skills are used only if already installed. Browser automation uses a host-provided adapter only."
+when: "Auditing or hardening an existing website, web app or Worker"
+category: audit
+level: advanced
+setup: "none; a local site checkout and its toolchain"
 ---
 
 # Website upgrade

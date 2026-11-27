@@ -1,6 +1,10 @@
 ---
 name: gitleaks-preflight
 description: "Use before commit, push, or deploy when gitleaks or secret scans block work."
+when: "A commit, push or deploy is blocked by a secret scan"
+category: ship
+level: beginner
+setup: "2 min; gitleaks installed"
 ---
 
 # Gitleaks preflight

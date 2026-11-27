@@ -1,6 +1,10 @@
 ---
 name: web-research-routing
 description: Use when choosing a paid search or extraction tool (Exa, Parallel, Firecrawl, treg) or writing a sourced research report. Not needed for a quick built-in search.
+when: "Choosing a search or extraction tool, or writing a sourced report"
+category: research
+level: beginner
+setup: "none; optional EXA_API_KEY, PARALLEL_API_KEY or the Firecrawl MCP"
 ---
 
 # Web research routing

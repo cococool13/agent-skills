@@ -1,6 +1,10 @@
 ---
 name: maintain-skill-library
 description: "Use when auditing or maintaining the installed skill library."
+when: "Auditing or updating your installed skill library"
+category: setup
+level: advanced
+setup: "10 min; the skills CLI, with paths and schedule adapted to your machine"
 ---
 
 # Maintain Skill Library
